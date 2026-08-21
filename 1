@@ -1,0 +1,488 @@
+--[[
+    PART COPIER GUI - Roblox Studio
+    -----------------------------------------------------
+    Chức năng:
+    1. Nút "COPY PART"  -> Quét TOÀN BỘ workspace, lấy hết
+       Part / MeshPart / UnionOperation / SpawnLocation ...
+       kèm hiệu ứng con: Fire, Smoke, Sparkles, ParticleEmitter,
+       Decal, Texture, Highlight ... rồi tự sinh ra 1 đoạn SCRIPT
+       Lua (dạng text) có thể chạy lại để respawn y hệt.
+    2. Nút "COPY SCRIPT" -> Bôi đen (select-all) toàn bộ script
+       vừa tạo trong ô TextBox để bạn bấm Ctrl+C copy ra ngoài
+       (hoặc tự copy vào clipboard nếu đang chạy trong executor
+       có hỗ trợ setclipboard).
+    3. Toggle "Spawn In Air" -> khi bật, script sinh ra sẽ cộng
+       thêm offset theo trục Y để part hiện ra lơ lửng trên không
+       thay vì đúng vị trí cũ (đỡ đè lên map gốc).
+
+    CÁCH DÙNG:
+    - Đặt file này làm LocalScript trong StarterPlayerScripts,
+      hoặc chạy trực tiếp trong Command Bar / server script tuỳ ý.
+    - Bấm "COPY PART" để quét -> script hiện trong ô bên dưới.
+    - Bấm "COPY SCRIPT" -> Ctrl+C -> dán vào 1 Script/LocalScript
+      mới (Script Editor) -> chạy là ra lại toàn bộ part+hiệu ứng.
+--]]
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+----------------------------------------------------------------
+-- CẤU HÌNH PROPERTY ĐƯỢC LẤY CHO TỪNG LOẠI INSTANCE
+----------------------------------------------------------------
+
+local PART_PROPS = {
+    "Size", "Color", "Material", "Transparency", "Reflectance",
+    "Anchored", "CanCollide", "CastShadow", "Name",
+    "Shape", "TopSurface", "BottomSurface", "Locked", "CanTouch",
+    -- Rieng cho MeshPart: neu thieu 2 cai nay thi MeshPart se hien ra
+    -- thanh khoi hop trong (khong co hinh dang / texture that)
+    "MeshId", "TextureID", "DoubleSided", "CollisionFidelity", "RenderFidelity",
+}
+
+-- Danh sách property "tổng quát" áp dụng thử cho MỌI loại instance không
+-- phải BasePart (Fire, Smoke, ParticleEmitter, Sparkles, Decal, Texture,
+-- Highlight, PointLight, SpotLight, SurfaceLight, Beam, Trail, Attachment,
+-- Explosion, Sound, Atmosphere, Clouds, Sky, Mesh/SpecialMesh, Weld, v.v.)
+-- Property nào instance không có sẽ tự bị pcall bỏ qua an toàn, nên cứ để
+-- danh sách càng rộng càng quét được nhiều loại effect khác nhau mà không
+-- cần biết trước class là gì.
+local GENERIC_PROPS = {
+    -- màu / hiển thị chung
+    "Color", "Color3", "SecondaryColor", "FillColor", "OutlineColor",
+    "SparkleColor", "VertexColor",
+    "Transparency", "FillTransparency", "OutlineTransparency",
+    -- particle / fire / smoke
+    "Size", "Lifetime", "Rate", "Speed", "SpreadAngle", "Texture",
+    "LightEmission", "LightInfluence", "Drag", "EmissionDirection",
+    "Enabled", "Rotation", "RotSpeed", "VelocitySpread", "ZOffset",
+    "Brightness", "Heat", "RiseVelocity", "Opacity", "Acceleration",
+    "TimeScale", "Squash", "Stretch", "Orientation",
+    "LockedToPart", -- particle co dinh vao part hay bay tu do trong khong gian
+    -- decal / texture
+    "Face", "StudsPerTileU", "StudsPerTileV",
+    -- light
+    "Range", "Angle", "Shadows",
+    -- beam / trail
+    "Width0", "Width1", "Segments", "TextureLength", "TextureSpeed",
+    "TextureMode", "CurveSize0", "CurveSize1", "FaceCamera",
+    -- âm thanh (Sound) - day du de spawn ra dung nhu ban goc
+    -- Luu y: "Playing" KHONG dua vao day nua, vi da co logic :Play() rieng
+    -- ben duoi xu ly phat am thanh -> tranh bi set trung (gay tieng meo/vong)
+    "SoundId", "Volume", "Looped", "PlaybackSpeed",
+    "RollOffMaxDistance", "RollOffMinDistance", "RollOffMode",
+    "SoundGroup", "PlayOnRemove", "EmitterSize",
+    -- mesh
+    "MeshId", "TextureId", "Scale", "MeshType",
+    -- SurfaceAppearance: material PBR that cua model 3D import tu Toolbox
+    "ColorMap", "NormalMap", "RoughnessMap", "MetalnessMap", "AlphaMode", "TextureString",
+    -- Flipbook: hieu ung particle dang sprite-sheet animation (Toolbox particle)
+    "FlipbookLayout", "FlipbookFramerate", "FlipbookMode", "FlipbookStartRandom",
+    -- attachment / vị trí phụ
+    "Position", "Axis", "SecondaryAxis",
+    -- atmosphere / sky / clouds
+    "Density", "Offset", "Glare", "Haze", "Cover", "Decay",
+    -- explosion
+    "BlastRadius", "BlastPressure",
+    -- chung
+    "Name",
+}
+
+-- Các class KHÔNG copy (mã nguồn / logic, không phải part hay hiệu ứng)
+local SKIP_CLASSES = {
+    Script = true,
+    LocalScript = true,
+    ModuleScript = true,
+}
+
+----------------------------------------------------------------
+-- HÀM SERIALIZE (VIẾT GIÁ TRỊ RA DẠNG CHUỖI LUA HỢP LỆ)
+----------------------------------------------------------------
+
+local function serializeValue(value)
+    local t = typeof(value)
+
+    if t == "number" then
+        return tostring(value)
+    elseif t == "boolean" then
+        return tostring(value)
+    elseif t == "string" then
+        return string.format("%q", value)
+    elseif t == "Color3" then
+        return string.format("Color3.new(%s, %s, %s)", value.R, value.G, value.B)
+    elseif t == "Vector3" then
+        return string.format("Vector3.new(%s, %s, %s)", value.X, value.Y, value.Z)
+    elseif t == "Vector2" then
+        return string.format("Vector2.new(%s, %s)", value.X, value.Y)
+    elseif t == "NumberRange" then
+        return string.format("NumberRange.new(%s, %s)", value.Min, value.Max)
+    elseif t == "NumberSequence" then
+        local keys = {}
+        for _, kp in ipairs(value.Keypoints) do
+            table.insert(keys, string.format(
+                "NumberSequenceKeypoint.new(%s, %s, %s)",
+                kp.Time, kp.Value, kp.Envelope
+            ))
+        end
+        return string.format("NumberSequence.new({%s})", table.concat(keys, ", "))
+    elseif t == "ColorSequence" then
+        local keys = {}
+        for _, kp in ipairs(value.Keypoints) do
+            table.insert(keys, string.format(
+                "ColorSequenceKeypoint.new(%s, Color3.new(%s, %s, %s))",
+                kp.Time, kp.Value.R, kp.Value.G, kp.Value.B
+            ))
+        end
+        return string.format("ColorSequence.new({%s})", table.concat(keys, ", "))
+    elseif t == "EnumItem" then
+        -- tostring(EnumItem) tra ve dung dang "Enum.Material.Plastic" -> Lua hop le san
+        return tostring(value)
+    elseif t == "Content" then
+        return string.format("%q", tostring(value))
+    else
+        -- kiểu không xác định -> bỏ qua an toàn
+        return nil
+    end
+end
+
+local function serializeCFrame(cf)
+    local c = {cf:GetComponents()}
+    return "CFrame.new(" .. table.concat(c, ", ") .. ")"
+end
+
+----------------------------------------------------------------
+-- HÀM SINH CODE CHO 1 INSTANCE HIỆU ỨNG (con của part)
+----------------------------------------------------------------
+
+-- Quét ĐỆ QUY toàn bộ con/cháu của 1 part, bất kể là loại effect gì
+-- (không giới hạn theo whitelist class nữa -> copy hết hết).
+local function buildEffectRecursive(inst, parentVarName, buffer, uniqueId)
+    local className = inst.ClassName
+    if SKIP_CLASSES[className] then return end
+
+    local okNew, testInst = pcall(function() return Instance.new(className) end)
+    if okNew and testInst then
+        testInst:Destroy()
+    else
+        -- Class không thể Instance.new (VD Terrain, Camera-only...) -> bỏ qua
+        return
+    end
+
+    uniqueId.n = uniqueId.n + 1
+    local id = uniqueId.n
+    local varName = "fx" .. id
+
+    -- Build code cua effect nay vao innerBuffer rieng, roi boc pcall RIENG
+    -- cua chinh no -> neu effect nay loi (VD 1 property la), chi no bi bo
+    -- qua, khong lam hong cac effect anh em hay effect con ben trong no.
+    local innerBuffer = {}
+    table.insert(innerBuffer, string.format('local %s = Instance.new("%s")', varName, className))
+    table.insert(innerBuffer, string.format("%s.Parent = %s", varName, parentVarName))
+
+    -- Rieng Sound: tinh AM LUONG THUC TE da cong don qua chuoi SoundGroup cha.
+    -- Ly do: SoundGroup nam trong SoundService (ngoai pham vi quet theo Part),
+    -- nen khong the tao lai duoc no -> phai "nen" do khuech dai cua SoundGroup
+    -- thang vao Volume ngay tu day, neu khong am thanh se nho/mong hon ban goc.
+    local effectiveVolume = nil
+    if className == "Sound" then
+        local okVol, vol = pcall(function() return inst.Volume end)
+        effectiveVolume = (okVol and type(vol) == "number") and vol or 1
+        local okGroup, group = pcall(function() return inst.SoundGroup end)
+        if okGroup then
+            local sg = group
+            while sg do
+                local okGv, gv = pcall(function() return sg.Volume end)
+                if okGv and type(gv) == "number" then
+                    effectiveVolume = effectiveVolume * gv
+                end
+                local okParent, parent = pcall(function() return sg.Parent end)
+                if okParent and parent and parent:IsA("SoundGroup") then
+                    sg = parent
+                else
+                    sg = nil
+                end
+            end
+        end
+    end
+
+    for _, propName in ipairs(GENERIC_PROPS) do
+        -- Rieng Sound: KHONG gan property "Playing"/"Volume"/"SoundGroup" o day.
+        -- Playing -> da goi :Play() rieng ben duoi (tranh phat chong 2 lan).
+        -- Volume -> da tinh effectiveVolume o tren (cong don ca SoundGroup).
+        -- SoundGroup -> tham chieu Instance, khong the tai tao lai duoc.
+        local skipForSound = className == "Sound" and (
+            propName == "Playing" or propName == "Volume" or propName == "SoundGroup"
+        )
+        if not skipForSound then
+            local ok, value = pcall(function() return inst[propName] end)
+            if ok and value ~= nil then
+                local serialized = serializeValue(value)
+                if serialized then
+                    table.insert(innerBuffer, string.format("%s.%s = %s", varName, propName, serialized))
+                end
+            end
+        end
+    end
+
+    if effectiveVolume then
+        table.insert(innerBuffer, string.format("%s.Volume = %s", varName, tostring(effectiveVolume)))
+    end
+
+    -- Rieng Sound: goi thang :Play() de dam bao phat that su, khong chi
+    -- dua vao gan property Playing (co the khong kich hoat lai am thanh).
+    if className == "Sound" then
+        local okPlaying, wasPlaying = pcall(function() return inst.Playing end)
+        local okSoundId, soundId = pcall(function() return inst.SoundId end)
+        if (okPlaying and wasPlaying) or (okSoundId and soundId and soundId ~= "") then
+            table.insert(innerBuffer, string.format("%s:Play()", varName))
+        end
+    end
+
+    -- Đệ quy xuống các con của effect này (VD Attachment chứa Beam/Trail)
+    for _, child in ipairs(inst:GetChildren()) do
+        if not child:IsA("BasePart") then
+            buildEffectRecursive(child, varName, innerBuffer, uniqueId)
+        end
+    end
+
+    table.insert(buffer, string.format("do local okfx%d, errfx%d = pcall(function()", id, id))
+    for _, line in ipairs(innerBuffer) do
+        table.insert(buffer, "    " .. line)
+    end
+    table.insert(buffer, "end)")
+    table.insert(buffer, string.format(
+        'if not okfx%d then warn("Loi tao effect [%s] %s: " .. tostring(errfx%d)) end',
+        id, className, varName, id
+    ))
+    table.insert(buffer, "end")
+    table.insert(buffer, "")
+end
+
+----------------------------------------------------------------
+-- HÀM DÒ SCALE CỦA MODEL CHA (Roblox Model.Scale - tính năng scale
+-- rig moi: khong doi Part.Size goc, chi nhan them luc hien thi/vat ly.
+-- Neu khong do cai nay, part se ra TO HON so voi cai ban thay trong
+-- Studio, vi Size doc duoc luon la size GOC (chua nhan scale).
+----------------------------------------------------------------
+
+local function getEffectiveModelScale(part)
+    local scale = 1
+    local ancestor = part.Parent
+    while ancestor do
+        if ancestor:IsA("Model") then
+            local applied = false
+            local ok1, s1 = pcall(function() return ancestor.Scale end)
+            if ok1 and type(s1) == "number" and s1 > 0 then
+                scale = scale * s1
+                applied = true
+            end
+            if not applied then
+                -- Mot so phien ban Roblox chi cho lay scale qua ham GetScale()
+                local ok2, s2 = pcall(function() return ancestor:GetScale() end)
+                if ok2 and type(s2) == "number" and s2 > 0 then
+                    scale = scale * s2
+                end
+            end
+        end
+        ancestor = ancestor.Parent
+    end
+    return scale
+end
+
+----------------------------------------------------------------
+-- HÀM SINH CODE CHO 1 PART + HIỆU ỨNG CON CỦA NÓ
+----------------------------------------------------------------
+
+local function buildPartCode(part, index, buffer, airOffset, uniqueId)
+    -- Thử tạo đúng class, nếu lỗi (VD UnionOperation không new được) thì fallback "Part"
+    local originalClassName = part.ClassName
+    local className = originalClassName
+    local okTest, testInst = pcall(function() return Instance.new(className) end)
+    local shapeLost = false
+    if okTest and testInst then
+        testInst:Destroy()
+    else
+        className = "Part"
+        shapeLost = true
+    end
+
+    local modelScale = getEffectiveModelScale(part)
+
+    -- Build code của part này vào 1 buffer riêng (innerBuffer), sau đó bọc
+    -- cả khối vào pcall(function() ... end) khi ghép vào buffer chính.
+    -- => nếu part/effect này bị lỗi khi chạy, chỉ nó bị bỏ qua (co warn bao),
+    -- các part khac van spawn binh thuong, khong bi sap ca script.
+    local innerBuffer = {}
+
+    if shapeLost then
+        -- Roblox khong cho script doc/tai tao hinh dang CSG that (VD Union),
+        -- nen phai fallback thanh khoi hop don gian -> can bao ro de biet
+        -- day la gioi han cua Roblox, khong phai loi script.
+        table.insert(innerBuffer, string.format(
+            '-- CANH BAO: part goc la "%s" (khong the tao lai bang Instance.new),' ..
+            ' dung khoi hop thay the -> hinh dang se KHONG giong 100%% ban goc.',
+            originalClassName
+        ))
+    end
+
+    local varName = "p" .. index
+    table.insert(innerBuffer, string.format('local %s = Instance.new("%s")', varName, className))
+
+    for _, propName in ipairs(PART_PROPS) do
+        local ok, value = pcall(function() return part[propName] end)
+        if ok and value ~= nil then
+            if propName == "Size" and typeof(value) == "Vector3" and modelScale ~= 1 then
+                -- Bu tru Model.Scale: Part.Size doc duoc la size GOC, phai
+                -- nhan them scale cua Model cha moi ra dung size hien thi that.
+                value = value * modelScale
+            end
+            local serialized = serializeValue(value)
+            if serialized then
+                table.insert(innerBuffer, string.format("%s.%s = %s", varName, propName, serialized))
+            end
+        end
+    end
+
+    -- Vị trí: dùng CFrame gốc, cộng thêm offset lên trời nếu bật airOffset
+    local ok, cf = pcall(function() return part.CFrame end)
+    if ok then
+        if airOffset and airOffset > 0 then
+            cf = cf + Vector3.new(0, airOffset, 0)
+        end
+        table.insert(innerBuffer, string.format("%s.CFrame = %s", varName, serializeCFrame(cf)))
+    end
+
+    table.insert(innerBuffer, string.format('%s.Parent = workspace', varName))
+    table.insert(innerBuffer, "")
+
+    -- Quét TOÀN BỘ con/cháu của part (mọi cấp, mọi loại effect) -> copy hết hết
+    for _, child in ipairs(part:GetChildren()) do
+        if not child:IsA("BasePart") then
+            buildEffectRecursive(child, varName, innerBuffer, uniqueId)
+        end
+    end
+
+    -- Ghép innerBuffer vào buffer chính, bọc trong pcall để cách ly lỗi
+    table.insert(buffer, string.format("do local ok%d, err%d = pcall(function()", index, index))
+    for _, line in ipairs(innerBuffer) do
+        table.insert(buffer, "    " .. line)
+    end
+    table.insert(buffer, "end)")
+    table.insert(buffer, string.format(
+        'if not ok%d then warn("Loi spawn part %d: " .. tostring(err%d)) end', index, index, index
+    ))
+    table.insert(buffer, "end")
+    table.insert(buffer, "")
+
+    return shapeLost
+end
+
+----------------------------------------------------------------
+-- HÀM QUÉT TOÀN MAP
+----------------------------------------------------------------
+
+local function scanAndGenerateScript(airOffset)
+    local buffer = {
+        "-- ================================================",
+        "-- SCRIPT ĐƯỢC TỰ SINH BỞI PART COPIER",
+        "-- Dan doan nay vao 1 Script (Server) HOAC LocalScript (Client)",
+        "-- bat ky, o bat ky noi nao (Workspace, ServerScriptService,",
+        "-- StarterPlayerScripts...) - kho ca file/game moi hoan toan.",
+        "-- KHONG dan vao ModuleScript (ModuleScript khong tu chay).",
+        "-- ================================================",
+        "",
+        "-- Cho game tai xong het roi moi chay, tranh loi do dan/chay qua som",
+        "-- (VD file moi vua tao, cac service chua san sang kip).",
+        "if not game:IsLoaded() then",
+        "    game.Loaded:Wait()",
+        "end",
+        "",
+    }
+
+    local index = 0
+    local shapeLostCount = 0
+    local uniqueId = {n = 0} -- dùng chung để đặt tên biến effect không trùng nhau trong cả script
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            index += 1
+            local shapeLost = buildPartCode(obj, index, buffer, airOffset, uniqueId)
+            if shapeLost then
+                shapeLostCount += 1
+            end
+        end
+    end
+
+    table.insert(buffer, string.format('print("Da spawn lai %d part.")', index))
+
+    return table.concat(buffer, "\n"), index, shapeLostCount
+end
+
+----------------------------------------------------------------
+-- TẠO GIAO DIỆN (GUI)
+----------------------------------------------------------------
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "PartCopierGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 480, 0, 420)
+mainFrame.Position = UDim2.new(0.5, -240, 0.5, -210)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 36)
+title.BackgroundTransparency = 1
+title.Text = "PART COPIER"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.Parent = mainFrame
+
+-- Toggle Spawn In Air
+local airToggle = Instance.new("TextButton")
+airToggle.Name = "AirToggle"
+airToggle.Size = UDim2.new(0, 150, 0, 30)
+airToggle.Position = UDim2.new(0, 12, 0, 40)
+airToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 68)
+airToggle.Text = "Spawn In Air: OFF"
+airToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+airToggle.Font = Enum.Font.Gotham
+airToggle.TextSize = 13
+airToggle.Parent = mainFrame
+
+local airCorner = Instance.new("UICorner")
+airCorner.CornerRadius = UDim.new(0, 6)
+airCorner.Parent = airToggle
+
+local airEnabled = false
+local AIR_HEIGHT = 60 -- studs cộng thêm lên trời
+
+airToggle.MouseButton1Click:Connect(function()
+    airEnabled = not airEnabled
+    airToggle.Text = "Spawn In Air: " .. (airEnabled and "ON" or "OFF")
+end)
+
+-- Nút COPY PART (quét map)
+local copyPartBtn = Instance.new("TextButton")
+copyPartBtn.Name = "CopyPartBtn"
+copyPartBtn.Size = UDim2.new(0, 150, 0, 30)
+copyPartBtn.Position = UDim2.new(0, 170, 0, 40)
+copyPartBtn.BackgroundColor3 = Color3.fromRGB(46, 125, 50)
+copyPartBtn.Text = "COPY PART"
+copyPartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyPartBtn.Font = Enum.Font.GothamBold
+copyPartBtn.TextSize = 14
+copyPartBtn.Parent = mainFrame
+
+local copyPartCorner = Instance.
