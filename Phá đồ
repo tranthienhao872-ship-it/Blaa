@@ -1,0 +1,109 @@
+local destroyedRooms = {}
+
+entity:SetCallback("OnEnterRoom", function(room: Model, firstTime: boolean)
+	if room and not destroyedRooms[room] then
+		destroyedRooms[room] = true
+
+		task.spawn(function()
+			task.wait(0.05)
+
+			local breakSound = Instance.new("Sound")
+			breakSound.SoundId = "rbxassetid://9114223171"
+			breakSound.Volume = 2.5
+			breakSound.Parent = room:FindFirstChild("Assets") or room
+			breakSound:Play()
+			breakSound.Ended:Connect(function() breakSound:Destroy() end)
+
+			local assetContainer = room:FindFirstChild("Assets") or room
+
+			local breakSounds = {
+				"rbxassetid://9125992545",
+				"rbxassetid://4004052860",
+				"rbxassetid://7142857558",
+				"rbxassetid://7142843615",
+				"rbxassetid://7142857558",
+				"rbxassetid://2612674531",
+				"rbxassetid://2174790942"
+			}
+			local blacklist = {"wardrobe", "bed", "rug", "key", "drawer", "book", "breaker", "table", "desk", "gold", "dresser"}
+
+			for _, item in pairs(assetContainer:GetChildren()) do
+				if item:IsA("Model") and item.Name ~= "Door" and item.Name ~= "HidingSpots" then
+
+					local isBlacklisted = false
+					local itemNameLower = string.lower(item.Name)
+					for _, word in ipairs(blacklist) do
+						if string.find(itemNameLower, word) then
+							isBlacklisted = true
+							break
+						end
+					end
+
+					if not isBlacklisted then
+						local primary = item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")
+
+						if primary then
+							-- Thread out the model destruction to let parts stagger their sound playbacks
+							task.spawn(function()
+								for _, v in ipairs(item:GetDescendants()) do
+									if v:IsA("BasePart") then
+										local lowerName = string.lower(v.Name)
+
+										if not string.find(lowerName, "floor") and not string.find(lowerName, "hitbox") then
+
+											-- STAGGER DELAY: Breaks up the 'one sound' audio compression
+											task.wait(math.random(1, 4) / 100)
+
+											local randomSoundId = breakSounds[math.random(1, #breakSounds)]
+
+											local s = Instance.new("Sound")
+											s.SoundId = randomSoundId
+											s.Volume = math.random(12, 24) / 10 
+											s.PlaybackSpeed = math.random(85, 115) / 100
+											s.RollOffMaxDistance = 100
+											s.Parent = v
+											s:Play()
+
+											s.Ended:Connect(function()
+												s:Destroy()
+											end)
+
+											v.Anchored = false
+											v.CanCollide = true 
+
+											v.CustomPhysicalProperties = PhysicalProperties.new(0.01, 0.01, 0.5, 1, 1)
+
+											pcall(function()
+												if v:CanSetNetworkOwnership() then
+													v:SetNetworkOwner(localPlayer)
+												end
+											end)
+
+											v.CFrame = v.CFrame + Vector3.new(0, 0.05, 0)
+										end
+									end
+								end
+							end)
+
+							primary.Anchored = true
+							task.wait()
+							primary.Anchored = false
+
+							primary.AssemblyLinearVelocity = Vector3.new(
+								math.random(-60, 60),
+								math.random(20, 50),
+								math.random(-60, 60)
+							)
+
+							primary.AssemblyAngularVelocity = Vector3.new(
+								math.random(-25, 25),
+								math.random(-25, 25),
+								math.random(-25, 25)
+							)
+						end
+					end
+				end
+			end
+		end)
+	end
+end)
