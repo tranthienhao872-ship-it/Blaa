@@ -1,5 +1,5 @@
 --========================================================--
---                 RIPPER ALWAYS SPAWN SYSTEM            --
+--                 RIPPER ONE TIME SYSTEM                --
 --              OgHungerNewSpawner Version               --
 --========================================================--
 
@@ -21,9 +21,19 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 -- SETTINGS
 --========================================================--
 
+-- NO CHANCE
+-- NO RANDOM
+
 local ripperActive = false
 local achievementEarned = false
 local processedRooms = {}
+
+--========================================================--
+-- ONE TIME CONTROL
+--========================================================--
+
+local hasSpawnedOnce = false
+local waitingForFirstNewRoom = true
 
 --========================================================--
 -- LOAD SPAWNER
@@ -53,19 +63,16 @@ introSound.Volume = 2
 introSound.Parent = SoundService
 
 local doorSound1 = Instance.new("Sound")
-doorSound1.Name = "RipperDoorSound1"
 doorSound1.SoundId = "rbxassetid://9126281820"
 doorSound1.Volume = 3
 doorSound1.Parent = SoundService
 
 local doorSound2 = Instance.new("Sound")
-doorSound2.Name = "RipperDoorSound2"
 doorSound2.SoundId = "rbxassetid://9126281769"
 doorSound2.Volume = 3
 doorSound2.Parent = SoundService
 
 local doorSound3 = Instance.new("Sound")
-doorSound3.Name = "RipperDoorSound3"
 doorSound3.SoundId = "rbxassetid://126631007956569"
 doorSound3.Volume = 3
 doorSound3.Parent = SoundService
@@ -73,12 +80,6 @@ doorSound3.Parent = SoundService
 --========================================================--
 -- RED SCREEN
 --========================================================--
-
-local oldGui = PlayerGui:FindFirstChild("RipperRedOverlay")
-
-if oldGui then
-	oldGui:Destroy()
-end
 
 local redGui = Instance.new("ScreenGui")
 redGui.Name = "RipperRedOverlay"
@@ -113,26 +114,15 @@ local function BreakRoom(room)
 
 		local assets = room:FindFirstChild("Assets") or room
 
-		--================================================--
-		-- MAIN BREAK SOUND
-		--================================================--
-
 		local mainBreak = Instance.new("Sound")
-		mainBreak.Name = "RipperMainBreak"
 		mainBreak.SoundId = "rbxassetid://9114223171"
 		mainBreak.Volume = 2.5
 		mainBreak.Parent = assets
 		mainBreak:Play()
 
 		mainBreak.Ended:Connect(function()
-			if mainBreak then
-				mainBreak:Destroy()
-			end
+			mainBreak:Destroy()
 		end)
-
-		--================================================--
-		-- BREAK SOUNDS
-		--================================================--
 
 		local breakSounds = {
 			"rbxassetid://9125992545",
@@ -142,10 +132,6 @@ local function BreakRoom(room)
 			"rbxassetid://2612674531",
 			"rbxassetid://2174790942"
 		}
-
-		--================================================--
-		-- BLACKLIST
-		--================================================--
 
 		local blacklist = {
 			"wardrobe",
@@ -160,10 +146,6 @@ local function BreakRoom(room)
 			"gold",
 			"dresser"
 		}
-
-		--================================================--
-		-- BREAK MODELS
-		--================================================--
 
 		for _, item in ipairs(assets:GetChildren()) do
 
@@ -210,8 +192,6 @@ local function BreakRoom(room)
 										local sound =
 											Instance.new("Sound")
 
-										sound.Name = "RipperBreak"
-
 										sound.SoundId =
 											breakSounds[
 												math.random(
@@ -231,9 +211,7 @@ local function BreakRoom(room)
 										sound:Play()
 
 										sound.Ended:Connect(function()
-											if sound then
-												sound:Destroy()
-											end
+											sound:Destroy()
 										end)
 
 										part.Anchored = false
@@ -251,11 +229,9 @@ local function BreakRoom(room)
 										pcall(function()
 
 											if part:CanSetNetworkOwnership() then
-
 												part:SetNetworkOwner(
 													LocalPlayer
 												)
-
 											end
 
 										end)
@@ -273,9 +249,7 @@ local function BreakRoom(room)
 						end)
 
 						primary.Anchored = true
-
 						task.wait()
-
 						primary.Anchored = false
 
 						primary.AssemblyLinearVelocity =
@@ -328,25 +302,17 @@ local function GiveAchievement()
 			end)
 
 		if not ok or not achievementGiver then
-
 			warn("[RIPPER] Achievement loader failed")
-
 			return
-
 		end
 
 		pcall(function()
 
 			achievementGiver({
-
 				Title = "Hide or be Torn Apart",
-
 				Desc = "Don't Leave Stand still..",
-
 				Reason = "Encounter and survive Ripper.",
-
 				Image = "rbxassetid://12231244908"
-
 			})
 
 		end)
@@ -364,30 +330,31 @@ end
 local function SpawnRipper()
 
 	if ripperActive then
-
-		print("[RIPPER] Already active")
-
 		return
+	end
 
+	if hasSpawnedOnce then
+		return
 	end
 
 	local character = LocalPlayer.Character
 
 	local humanoid =
-		character
-		and character:FindFirstChildOfClass("Humanoid")
+		character and
+		character:FindFirstChildOfClass("Humanoid")
 
 	if not humanoid or humanoid.Health <= 0 then
-
-		warn("[RIPPER] Player is dead")
-
 		return
-
 	end
 
+	--====================================================--
+	-- LOCK PERMANENTLY
+	--====================================================--
+
+	hasSpawnedOnce = true
 	ripperActive = true
 
-	print("[RIPPER] >>> SPAWNING IMMEDIATELY <<<")
+	print("[RIPPER] ONE TIME SPAWN")
 
 	--====================================================--
 	-- ENTITY
@@ -398,100 +365,59 @@ local function SpawnRipper()
 		return Spawner:Create({
 
 			Entity = {
-
 				Name = "Ripper Entity",
-
-				Asset = "117530470323606",
-
+				Asset = "89134303045466",
 				HeightOffset = 0
-
 			},
 
 			Lights = {
-
 				Flicker = {
-
 					Enabled = true,
-
 					Duration = 1
-
 				},
 
 				Shatter = true,
-
 				Repair = false
-
 			},
 
 			Earthquake = {
-
 				Enabled = true
-
 			},
 
 			Spawned = {
-
 				ChangeColorWhenSpawn = false,
-
 				Rainbow = false,
-
-				Color =
-					Color3.fromRGB(
-						0,
-						85,
-						255
-					)
-
+				Color = Color3.fromRGB(0, 85, 255)
 			},
 
 			CameraShake = {
-
 				Enabled = true,
-
 				Range = 100,
-
-				Values = {
-					1.5,
-					40,
-					0.1,
-					1
-				}
-
+				Values = {1.5, 40, 0.1, 1}
 			},
 
 			Movement = {
-
 				Speed = 180,
-
 				SpeedFast = 1700,
-
 				MoveFastNotEnter = false,
-
 				Delay = 2,
-
 				Reversed = false,
-
 				EndWhenEnterLatestRoom = false,
-
 				EndDelay = 0,
 
 				ReboundMoving = false,
-
 				TweenSecond = 1.5,
 
 				ReboundMoveStyle = false,
-
 				ReboundStyleTimes = 3,
 
 				ReboundStyleSound =
 					"rbxassetid://130994177179386",
 
 				ReboundStyleVolume = 5
-
 			},
 
 			Jumpscare = {
-
 				Enabled = false,
 
 				Image1 =
@@ -507,56 +433,38 @@ local function SpawnRipper()
 					"rbxassetid://109582246349306",
 
 				Tease = {
-
 					[1] = true,
-
 					Min = 1,
-
 					Max = 1
-
 				},
 
 				Flashing = {
-
 					[1] = true,
-
 					[2] =
 						Color3.fromRGB(
 							255,
 							255,
 							255
 						)
-
 				},
 
 				Shake = true
-
 			},
 
 			Rebounding = {
-
 				Enabled = false,
-
 				Type = "Ambush",
-
 				Min = 1,
-
 				Max = 1,
-
 				Delay = 2
-
 			},
 
 			Damage = {
 
 				Enabled = true,
-
 				KillOnMove = false,
-
 				Range = 40,
-
 				Amount = 125,
-
 				IgnoreHiding = false,
 
 				JumpscareRipper = {
@@ -585,39 +493,25 @@ local function SpawnRipper()
 					Images = {
 
 						"rbxassetid://8482795900",
-
 						"rbxassetid://236542974",
-
 						"rbxassetid://184251462",
-
 						"rbxassetid://236777652"
-
 					},
 
 					FlashDuration = 1.6
-
 				}
-
 			},
 
 			Crucifixion = {
-
 				Enabled = true,
-
 				Range = 40,
-
 				Resist = false,
-
 				Break = true
-
 			},
 
 			Death = {
-
 				Type = "Guiding",
-
 				Cause = "Ripper"
-
 			}
 
 		})
@@ -630,69 +524,43 @@ local function SpawnRipper()
 
 		ripperActive = false
 
-		return
+		-- Không cho thử lại
+		hasSpawnedOnce = true
 
+		return
 	end
 
 	--====================================================--
-	-- CALLBACK: SPAWN
+	-- CALLBACKS
 	--====================================================--
 
-	entity:SetCallback(
-		"OnSpawned",
-		function()
+	entity:SetCallback("OnSpawned", function()
 
-			print("[RIPPER] Entity spawned")
+		print("[RIPPER] Entity spawned")
 
-			introSound:Stop()
+		introSound:Stop()
+		introSound.TimePosition = 0
+		introSound:Play()
 
-			introSound.TimePosition = 0
+		TweenService:Create(
+			redFrame,
+			TweenInfo.new(1),
+			{
+				BackgroundTransparency = 0.3
+			}
+		):Play()
 
-			introSound:Play()
+	end)
 
-			TweenService:Create(
+	entity:SetCallback("OnStartMoving", function()
 
-				redFrame,
+		print("[RIPPER] Moving")
 
-				TweenInfo.new(1),
-
-				{
-
-					BackgroundTransparency = 0.3
-
-				}
-
-			):Play()
-
-		end
-	)
-
-	--====================================================--
-	-- CALLBACK: START MOVING
-	--====================================================--
-
-	entity:SetCallback(
-		"OnStartMoving",
-		function()
-
-			print("[RIPPER] Moving")
-
-		end
-	)
-
-	--====================================================--
-	-- CALLBACK: ENTER ROOM
-	--====================================================--
+	end)
 
 	entity:SetCallback(
 		"OnEnterRoom",
 		function(room, firstTime)
-
-			print("[RIPPER] Entered room")
-
-			doorSound1:Stop()
-			doorSound2:Stop()
-			doorSound3:Stop()
 
 			doorSound1:Play()
 			doorSound2:Play()
@@ -703,39 +571,23 @@ local function SpawnRipper()
 		end
 	)
 
-	--====================================================--
-	-- CALLBACK: LOOK AT
-	--====================================================--
-
 	entity:SetCallback(
 		"OnLookAt",
 		function(lineOfSight)
-
-	end)
-
-	--====================================================--
-	-- CALLBACK: REBOUND
-	--====================================================--
+		end
+	)
 
 	entity:SetCallback(
 		"OnRebounding",
 		function(startOfRebound)
-
-	end)
-
-	--====================================================--
-	-- CALLBACK: END WHEN GO
-	--====================================================--
+		end
+	)
 
 	entity:SetCallback(
 		"EndWhenGO",
 		function()
-
-	end)
-
-	--====================================================--
-	-- CALLBACK: DESPAWNING
-	--====================================================--
+		end
+	)
 
 	entity:SetCallback(
 		"OnDespawning",
@@ -744,25 +596,15 @@ local function SpawnRipper()
 			print("[RIPPER] Despawning")
 
 			TweenService:Create(
-
 				redFrame,
-
 				TweenInfo.new(1),
-
 				{
-
 					BackgroundTransparency = 1
-
 				}
-
 			):Play()
 
 		end
 	)
-
-	--====================================================--
-	-- CALLBACK: DESPAWNED
-	--====================================================--
 
 	entity:SetCallback(
 		"OnDespawned",
@@ -773,50 +615,31 @@ local function SpawnRipper()
 			ripperActive = false
 
 			introSound:Stop()
-
 			doorSound1:Stop()
 			doorSound2:Stop()
 			doorSound3:Stop()
 
 			TweenService:Create(
-
 				redFrame,
-
 				TweenInfo.new(1),
-
 				{
-
 					BackgroundTransparency = 1
-
 				}
-
 			):Play()
-
-			--==============================================--
-			-- ACHIEVEMENT ONLY IF PLAYER SURVIVES
-			--==============================================--
 
 			local char =
 				LocalPlayer.Character
 
 			local hum =
-				char
-				and char:FindFirstChildOfClass(
-					"Humanoid"
-				)
+				char and
+				char:FindFirstChildOfClass("Humanoid")
 
 			if hum and hum.Health > 0 then
-
 				GiveAchievement()
-
 			end
 
 		end
 	)
-
-	--====================================================--
-	-- CALLBACK: DAMAGE
-	--====================================================--
 
 	entity:SetCallback(
 		"OnDamagePlayer",
@@ -831,26 +654,16 @@ local function SpawnRipper()
 	)
 
 	--====================================================--
-	-- RUN ENTITY
+	-- RUN
 	--====================================================--
 
 	task.spawn(function()
 
 		task.wait(0.1)
 
-		if not entity then
-
-			ripperActive = false
-
-			return
-
-		end
-
 		local runOK, runError =
 			pcall(function()
-
 				entity:Run(true)
-
 			end)
 
 		if not runOK then
@@ -869,17 +682,13 @@ local function SpawnRipper()
 end
 
 --========================================================--
--- CURRENT ROOMS
+-- ROOM NUMBER
 --========================================================--
 
 local CurrentRooms =
 	workspace:WaitForChild("CurrentRooms")
 
 local highestRoom = -1
-
---========================================================--
--- ROOM NUMBER
---========================================================--
 
 local function GetRoomNumber(room)
 
@@ -891,9 +700,7 @@ local function GetRoomNumber(room)
 		room:GetAttribute("RoomNumber")
 
 	if typeof(attribute) == "number" then
-
 		return attribute
-
 	end
 
 	return tonumber(room.Name)
@@ -901,7 +708,7 @@ local function GetRoomNumber(room)
 end
 
 --========================================================--
--- DETECT CURRENT HIGHEST ROOM
+-- INITIAL ROOM
 --========================================================--
 
 for _, room in ipairs(CurrentRooms:GetChildren()) do
@@ -910,9 +717,7 @@ for _, room in ipairs(CurrentRooms:GetChildren()) do
 		GetRoomNumber(room)
 
 	if number and number > highestRoom then
-
 		highestRoom = number
-
 	end
 
 end
@@ -923,10 +728,7 @@ print(
 )
 
 --========================================================--
--- NEW ROOM
--- NO CHANCE
--- NO RANDOM ROLL
--- ALWAYS SPAWN
+-- FIRST NEW ROOM ONLY
 --========================================================--
 
 local function NewRoom(room)
@@ -938,6 +740,7 @@ local function NewRoom(room)
 		return
 	end
 
+	-- Không xử lý room cũ
 	if roomNumber <= highestRoom then
 		return
 	end
@@ -949,43 +752,30 @@ local function NewRoom(room)
 		roomNumber
 	)
 
-	task.wait(0.1)
+	--====================================================--
+	-- CHỈ SPAWN 1 LẦN
+	--====================================================--
+
+	if hasSpawnedOnce then
+		print("[RIPPER] Already spawned once - ignored")
+		return
+	end
 
 	local char =
 		LocalPlayer.Character
 
 	local hum =
-		char
-		and char:FindFirstChildOfClass(
-			"Humanoid"
-		)
+		char and
+		char:FindFirstChildOfClass("Humanoid")
 
 	if not hum or hum.Health <= 0 then
 		return
 	end
 
-	if ripperActive then
-
-		print(
-			"[RIPPER] Already active - skipping duplicate"
-		)
-
-		return
-
-	end
-
-	--====================================================--
-	-- ALWAYS SPAWN
-	--====================================================--
-
-	print(
-		"[RIPPER] >>> NEW ROOM -> RIPPER SPAWN <<<"
-	)
+	print("[RIPPER] FIRST NEW ROOM - SPAWNING")
 
 	task.spawn(function()
-
 		SpawnRipper()
-
 	end)
 
 end
@@ -1014,6 +804,10 @@ task.spawn(function()
 
 	while task.wait(0.5) do
 
+		if hasSpawnedOnce then
+			continue
+		end
+
 		local newest = highestRoom
 		local newestRoom = nil
 
@@ -1034,45 +828,10 @@ task.spawn(function()
 		end
 
 		if newestRoom then
-
 			NewRoom(newestRoom)
-
 		end
 
 	end
-
-end)
-
---========================================================--
--- IMMEDIATE SPAWN
---========================================================--
-
-task.spawn(function()
-
-	task.wait(0.2)
-
-	local character =
-		LocalPlayer.Character
-
-	local humanoid =
-		character
-		and character:FindFirstChildOfClass(
-			"Humanoid"
-		)
-
-	if not humanoid or humanoid.Health <= 0 then
-
-		warn("[RIPPER] Cannot spawn - player dead")
-
-		return
-
-	end
-
-	print("--------------------------------")
-	print("      IMMEDIATE RIPPER SPAWN")
-	print("--------------------------------")
-
-	SpawnRipper()
 
 end)
 
@@ -1081,13 +840,12 @@ end)
 --========================================================--
 
 print("--------------------------------")
-print("       RIPPER ALWAYS READY")
+print("       RIPPER ONE TIME READY")
 print("--------------------------------")
-print("Spawner : OgHungerNewSpawner")
-print("Chance  : NONE")
-print("Random  : OFF")
-print("Initial : IMMEDIATE")
-print("New Room: ALWAYS SPAWN")
-print("Jumpscare: Built-in Ripper")
-print("Achievement: Once per execution")
+print("Chance : DISABLED")
+print("Random : DISABLED")
+print("Initial Spawn : OFF")
+print("First New Room : SPAWN")
+print("Maximum Spawn : 1")
+print("Achievement : ONCE")
 print("--------------------------------")
