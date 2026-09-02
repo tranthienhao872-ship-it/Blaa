@@ -1,0 +1,1658 @@
+--========================================================--
+--                    FROSTBITE SYSTEM                    --
+--========================================================--
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ContentProvider = game:GetService("ContentProvider")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local CurrentRooms = workspace:WaitForChild("CurrentRooms")
+
+--========================================================--
+--                       SETTINGS
+--========================================================--
+
+local FROSTBITE_ID = "rbxassetid://104627906841927"
+
+local VIGNETTE_ID =
+	"https://www.roblox.com/asset-thumbnail/image?assetId=16967650108&width=768&height=768&format=png"
+
+local FROSTBITE_IMAGE_ID =
+	"rbxassetid://79857827573119"
+
+local SOUND_ID =
+	"rbxassetid://8581546179"
+
+local ATTACK_SOUND_ID =
+	"rbxassetid://127072724991408"
+
+local FINAL_SOUND_ID =
+	"rbxassetid://134259957428558"
+
+local BREAK_SOUND_ID =
+	"rbxassetid://9114223171"
+
+local GROW_SPEED = 6
+local LIGHTER_SPEED = 7
+
+local DAMAGE_START = 50
+local DAMAGE = 5
+
+--========================================================--
+--                       VARIABLES
+--========================================================--
+
+local doorCount = 0
+
+local currentFrostbite = nil
+local currentLight = nil
+local currentSound = nil
+local currentRoom = nil
+
+local frostbiteValue = 0
+local damageTimer = 0
+
+local stopped = false
+local roomRockChanged = false
+
+local cameraShakeRunning = false
+local endingSequenceRunning = false
+local spawningFrostbite = false
+
+local roomConnection = nil
+local barConnection = nil
+
+local destroyedRooms = {}
+
+--========================================================--
+--                    REMOVE OLD GUI
+--========================================================--
+
+local oldGui = playerGui:FindFirstChild("FrostbiteSystem")
+
+if oldGui then
+	oldGui:Destroy()
+end
+
+--========================================================--
+--                       SCREEN GUI
+--========================================================--
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FrostbiteSystem"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.DisplayOrder = 999999
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.Parent = playerGui
+
+--========================================================--
+--                     BLUE SCREEN
+--========================================================--
+
+local blueFrame = Instance.new("Frame")
+blueFrame.Name = "BlueEffect"
+blueFrame.Size = UDim2.fromScale(1, 1)
+blueFrame.Position = UDim2.fromScale(0, 0)
+blueFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 110)
+blueFrame.BackgroundTransparency = 1
+blueFrame.BorderSizePixel = 0
+blueFrame.ZIndex = 1
+blueFrame.Parent = screenGui
+
+--========================================================--
+--                    FROSTBITE IMAGE
+--========================================================--
+
+local frostbiteImage = Instance.new("ImageLabel")
+frostbiteImage.Name = "FrostbiteImage"
+frostbiteImage.Size = UDim2.fromScale(1, 1)
+frostbiteImage.Position = UDim2.fromScale(0, 0)
+frostbiteImage.BackgroundTransparency = 1
+frostbiteImage.BorderSizePixel = 0
+frostbiteImage.Image = FROSTBITE_IMAGE_ID
+frostbiteImage.ImageTransparency = 1
+frostbiteImage.ScaleType = Enum.ScaleType.Stretch
+frostbiteImage.ZIndex = 2
+frostbiteImage.Parent = screenGui
+
+--========================================================--
+--                       VIGNETTE
+--========================================================--
+
+local vignette = Instance.new("ImageLabel")
+vignette.Name = "Vignette"
+vignette.Size = UDim2.fromScale(1, 1)
+vignette.Position = UDim2.fromScale(0, 0)
+vignette.BackgroundTransparency = 1
+vignette.BorderSizePixel = 0
+vignette.Image = VIGNETTE_ID
+vignette.ImageTransparency = 1
+vignette.ImageColor3 = Color3.fromRGB(255, 255, 255)
+vignette.ScaleType = Enum.ScaleType.Stretch
+vignette.Visible = true
+vignette.ZIndex = 100
+vignette.Parent = screenGui
+
+task.spawn(function()
+	pcall(function()
+		ContentProvider:PreloadAsync({
+			vignette,
+			frostbiteImage
+		})
+	end)
+
+	print("Vignette:", vignette.Image)
+	print("Vignette Loaded:", vignette.IsLoaded)
+end)
+
+--========================================================--
+--                    FROSTBITE BAR
+--========================================================--
+
+local frostbiteGui = Instance.new("Frame")
+frostbiteGui.Name = "FrostbiteBar"
+frostbiteGui.AnchorPoint = Vector2.new(0, 0.5)
+frostbiteGui.Position = UDim2.new(-0.2, 0, 0.5, 0)
+frostbiteGui.Size = UDim2.new(0, 50, 0, 300)
+frostbiteGui.BackgroundColor3 = Color3.fromRGB(0, 15, 75)
+frostbiteGui.BackgroundTransparency = 0.05
+frostbiteGui.BorderSizePixel = 0
+frostbiteGui.ZIndex = 5
+frostbiteGui.Parent = screenGui
+
+local barCorner = Instance.new("UICorner")
+barCorner.CornerRadius = UDim.new(0, 18)
+barCorner.Parent = frostbiteGui
+
+local barStroke = Instance.new("UIStroke")
+barStroke.Color = Color3.fromRGB(0, 70, 190)
+barStroke.Thickness = 3
+barStroke.Parent = frostbiteGui
+
+--========================================================--
+--                         TITLE
+--========================================================--
+
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.BackgroundTransparency = 1
+title.Position = UDim2.new(0, -10, 0, -40)
+title.Size = UDim2.new(1, 20, 0, 35)
+title.Font = Enum.Font.Oswald
+title.Text = "Frostbite"
+title.TextColor3 = Color3.fromRGB(0, 170, 255)
+title.TextSize = 19
+title.TextStrokeColor3 = Color3.fromRGB(0, 35, 100)
+title.TextStrokeTransparency = 0
+title.ZIndex = 10
+title.Parent = frostbiteGui
+
+--========================================================--
+--                    BAR BACKGROUND
+--========================================================--
+
+local barBackground = Instance.new("Frame")
+barBackground.Name = "BarBackground"
+barBackground.AnchorPoint = Vector2.new(0.5, 0.5)
+barBackground.Position = UDim2.fromScale(0.5, 0.5)
+barBackground.Size = UDim2.new(0, 25, 0, 270)
+barBackground.BackgroundColor3 = Color3.fromRGB(0, 5, 45)
+barBackground.BorderSizePixel = 0
+barBackground.ClipsDescendants = true
+barBackground.ZIndex = 6
+barBackground.Parent = frostbiteGui
+
+local bgCorner = Instance.new("UICorner")
+bgCorner.CornerRadius = UDim.new(1, 0)
+bgCorner.Parent = barBackground
+
+local bgStroke = Instance.new("UIStroke")
+bgStroke.Color = Color3.fromRGB(0, 45, 150)
+bgStroke.Thickness = 2
+bgStroke.Parent = barBackground
+
+--========================================================--
+--                         FILL
+--========================================================--
+
+local fill = Instance.new("Frame")
+fill.Name = "Fill"
+fill.AnchorPoint = Vector2.new(0, 1)
+fill.Position = UDim2.new(0, 0, 1, 0)
+fill.Size = UDim2.new(1, 0, 0, 0)
+fill.BackgroundColor3 = Color3.fromRGB(0, 105, 255)
+fill.BorderSizePixel = 0
+fill.ZIndex = 7
+fill.Parent = barBackground
+
+local fillCorner = Instance.new("UICorner")
+fillCorner.CornerRadius = UDim.new(1, 0)
+fillCorner.Parent = fill
+
+--========================================================--
+--                     BAR FADE
+--========================================================--
+
+local barOverlay = Instance.new("Frame")
+barOverlay.Name = "BlueFade"
+barOverlay.Size = UDim2.fromScale(1, 1)
+barOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+barOverlay.BackgroundTransparency = 0.8
+barOverlay.BorderSizePixel = 0
+barOverlay.ZIndex = 8
+barOverlay.Parent = barBackground
+
+local overlayCorner = Instance.new("UICorner")
+overlayCorner.CornerRadius = UDim.new(1, 0)
+overlayCorner.Parent = barOverlay
+
+--========================================================--
+--                     CHARACTER
+--========================================================--
+
+local function getCharacter()
+	local character = player.Character or player.CharacterAdded:Wait()
+	local humanoid = character:WaitForChild("Humanoid")
+	local root = character:WaitForChild("HumanoidRootPart")
+
+	return character, humanoid, root
+end
+--========================================================--
+--                       LIGHT
+--========================================================--
+
+local function removeLight()
+	if currentLight then
+		pcall(function()
+			currentLight:Destroy()
+		end)
+
+		currentLight = nil
+	end
+end
+
+local function createLight()
+	removeLight()
+
+	local _, _, root = getCharacter()
+
+	local light = Instance.new("PointLight")
+	light.Name = "FrostbiteBlueLight"
+	light.Color = Color3.fromRGB(0, 50, 255)
+	light.Brightness = 4
+	light.Range = 300
+	light.Shadows = false
+	light.Parent = root
+
+	currentLight = light
+end
+
+--========================================================--
+--                       LIGHTER
+--========================================================--
+
+local function hasLighter()
+	local character = player.Character
+
+	if not character then
+		return false
+	end
+
+	for _, tool in ipairs(character:GetChildren()) do
+		if tool:IsA("Tool") then
+			local name = string.lower(tool.Name)
+
+			if
+				name == "lighter"
+				or name == "lighting"
+				or string.find(name, "lighter")
+				or string.find(name, "lighting")
+				or string.find(name, "light")
+			then
+
+				local foundLight = false
+
+				for _, obj in ipairs(tool:GetDescendants()) do
+					if
+						obj:IsA("PointLight")
+						or obj:IsA("SpotLight")
+						or obj:IsA("SurfaceLight")
+					then
+						foundLight = true
+
+						if obj.Enabled then
+							return true
+						end
+					end
+				end
+
+				if not foundLight then
+					return true
+				end
+			end
+		end
+	end
+
+	return false
+end
+
+--========================================================--
+--                       SHOW BAR
+--========================================================--
+
+local function showBar()
+	TweenService:Create(
+		frostbiteGui,
+		TweenInfo.new(
+			0.7,
+			Enum.EasingStyle.Sine,
+			Enum.EasingDirection.Out
+		),
+		{
+			Position = UDim2.new(
+				0,
+				18,
+				0.5,
+				0
+			)
+		}
+	):Play()
+end
+
+--========================================================--
+--                       HIDE BAR
+--========================================================--
+
+local function hideBar()
+	TweenService:Create(
+		frostbiteGui,
+		TweenInfo.new(
+			0.5,
+			Enum.EasingStyle.Sine,
+			Enum.EasingDirection.In
+		),
+		{
+			Position = UDim2.new(
+				-0.2,
+				0,
+				0.5,
+				0
+			)
+		}
+	):Play()
+end
+
+--========================================================--
+--                  BLUE SCREEN EFFECT
+--========================================================--
+
+local function startScreenEffects()
+	createLight()
+
+	blueFrame.BackgroundTransparency = 0.2
+
+	TweenService:Create(
+		blueFrame,
+		TweenInfo.new(
+			0.8,
+			Enum.EasingStyle.Sine
+		),
+		{
+			BackgroundTransparency = 0.65
+		}
+	):Play()
+
+	vignette.Visible = true
+	vignette.ImageTransparency = 1
+	frostbiteImage.ImageTransparency = 1
+end
+
+--========================================================--
+--                    CAMERA SHAKER
+--========================================================--
+
+local CameraShaker
+
+pcall(function()
+	CameraShaker = require(
+		ReplicatedStorage:WaitForChild("CameraShaker")
+	)
+end)
+
+local cameraShake
+
+if CameraShaker then
+	cameraShake = CameraShaker.new(
+		Enum.RenderPriority.Camera.Value,
+
+		function(shakeCf)
+			local camera = workspace.CurrentCamera
+
+			if camera then
+				camera.CFrame =
+					camera.CFrame * shakeCf
+			end
+		end
+	)
+end
+
+--========================================================--
+--                    START SHAKE
+--========================================================--
+
+local function startShake()
+
+	if not cameraShake then
+		return
+	end
+
+	if cameraShakeRunning then
+		return
+	end
+
+	cameraShakeRunning = true
+
+	pcall(function()
+		cameraShake:Start()
+	end)
+
+	task.spawn(function()
+
+		while cameraShakeRunning do
+
+			if
+				not currentFrostbite
+				or not currentFrostbite.Parent
+			then
+				break
+			end
+
+			pcall(function()
+				cameraShake:ShakeOnce(
+					15,
+					12,
+					0.05,
+					0.45,
+					0,
+					0.8
+				)
+			end)
+
+			task.wait(0.5)
+		end
+
+		cameraShakeRunning = false
+
+		pcall(function()
+			cameraShake:Stop()
+		end)
+	end)
+end
+
+--========================================================--
+--                    STOP SHAKE
+--========================================================--
+
+local function stopShake()
+
+	cameraShakeRunning = false
+
+	if cameraShake then
+		pcall(function()
+			cameraShake:Stop()
+		end)
+	end
+end
+
+--========================================================--
+--                LARGE ROOM SOUND
+--========================================================--
+
+local function playLargeRoomSound(soundId, volume)
+
+	local sound = Instance.new("Sound")
+
+	sound.Name = "FrostbiteEndingSound"
+	sound.SoundId = soundId
+	sound.Volume = volume
+
+	sound.RollOffMode =
+		Enum.RollOffMode.InverseTapered
+
+	sound.RollOffMaxDistance = 1000
+	sound.RollOffMinDistance = 10
+
+	local reverb =
+		Instance.new("ReverbSoundEffect")
+
+	reverb.Name = "LargeRoomReverb"
+	reverb.DecayTime = 5
+	reverb.Density = 0.8
+	reverb.Diffusion = 0.9
+	reverb.WetLevel = 0.65
+	reverb.DryLevel = 0.7
+
+	reverb.Parent = sound
+	sound.Parent = workspace
+
+	pcall(function()
+		ContentProvider:PreloadAsync({sound})
+	end)
+
+	sound:Play()
+
+	return sound
+end
+--========================================================--
+--              CLEAN ALL FROSTBITE OBJECTS
+--========================================================--
+
+local function cleanAllFrostbite()
+
+	if currentSound then
+		pcall(function()
+			currentSound.Looped = false
+			currentSound:Stop()
+			currentSound:Destroy()
+		end)
+
+		currentSound = nil
+	end
+
+	if currentFrostbite then
+		pcall(function()
+			currentFrostbite:Destroy()
+		end)
+
+		currentFrostbite = nil
+	end
+
+	for _, obj in ipairs(workspace:GetChildren()) do
+		if obj.Name == "Frostbite" then
+			pcall(function()
+				obj:Destroy()
+			end)
+		end
+	end
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Sound") then
+			if
+				obj.Name == "FrostbiteSound"
+				or obj.Name == "FrostbiteEndingSound"
+			then
+				pcall(function()
+					obj:Stop()
+					obj:Destroy()
+				end)
+			end
+		end
+	end
+end
+
+--========================================================--
+--                  ENDING SHAKE
+--========================================================--
+
+local function endingShake(duration)
+
+	if not cameraShake then
+		return
+	end
+
+	-- Không tạo loop thứ 2
+	if cameraShakeRunning then
+		return
+	end
+
+	cameraShakeRunning = true
+
+	pcall(function()
+		cameraShake:Start()
+	end)
+
+	local startTime = tick()
+
+	while
+		cameraShakeRunning
+		and tick() - startTime < duration
+	do
+
+		pcall(function()
+			cameraShake:ShakeOnce(
+				15,
+				12,
+				0.03,
+				0.35,
+				0,
+				0.8
+			)
+		end)
+
+		task.wait(0.3)
+	end
+
+	cameraShakeRunning = false
+
+	pcall(function()
+		cameraShake:Stop()
+	end)
+end
+
+--========================================================--
+--                 DESTROY FROSTBITE
+--========================================================--
+
+local function destroyFrostbite()
+
+	if endingSequenceRunning then
+		return
+	end
+
+	endingSequenceRunning = true
+
+	--====================================================--
+	--                  STOP SHAKE FIRST
+	--====================================================--
+
+	stopShake()
+
+	--====================================================--
+	--                  BAR MẤT TRƯỚC
+	--====================================================--
+
+	hideBar()
+
+	frostbiteValue = 0
+	damageTimer = 0
+
+	fill.Size =
+		UDim2.new(
+			1,
+			0,
+			0,
+			0
+		)
+
+	--====================================================--
+	--                  DELETE ENTITY
+	--====================================================--
+
+	cleanAllFrostbite()
+
+	currentRoom = nil
+	roomRockChanged = false
+
+	-- Đợi bar trượt ra
+	task.wait(0.5)
+
+	--====================================================--
+	--                  ENDING EFFECT
+	--====================================================--
+
+	blueFrame.BackgroundTransparency = 0.2
+
+	vignette.Visible = true
+	vignette.ImageTransparency = 0.25
+
+	frostbiteImage.ImageTransparency = 0.35
+
+	--====================================================--
+	--                  ENDING SOUND 1
+	--====================================================--
+
+	local sound1 =
+		playLargeRoomSound(
+			ATTACK_SOUND_ID,
+			6
+		)
+
+	--====================================================--
+	--                  ENDING SOUND 2
+	--====================================================--
+
+	local sound2 =
+		playLargeRoomSound(
+			FINAL_SOUND_ID,
+			7
+		)
+
+	--====================================================--
+	--                   ENDING SHAKE
+	--====================================================--
+
+	task.spawn(function()
+
+		local duration1 = 0
+		local duration2 = 0
+
+		pcall(function()
+			duration1 = sound1.TimeLength
+		end)
+
+		pcall(function()
+			duration2 = sound2.TimeLength
+		end)
+
+		local duration =
+			math.max(
+				duration1,
+				duration2,
+				2
+			)
+
+		endingShake(duration)
+	end)
+
+	--====================================================--
+	--                 WAIT SOUNDS
+	--====================================================--
+
+	local finished1 = false
+	local finished2 = false
+
+	sound1.Ended:Connect(function()
+		finished1 = true
+	end)
+
+	sound2.Ended:Connect(function()
+		finished2 = true
+	end)
+
+	local timeout =
+		tick() + 15
+
+	while
+		(not finished1 or not finished2)
+		and tick() < timeout
+	do
+
+		task.wait(0.05)
+	end
+
+	--====================================================--
+	--                    STOP SHAKE
+	--====================================================--
+
+	stopShake()
+
+	--====================================================--
+	--                    CLEAN SOUND
+	--====================================================--
+
+	pcall(function()
+		sound1:Stop()
+		sound1:Destroy()
+	end)
+
+	pcall(function()
+		sound2:Stop()
+		sound2:Destroy()
+	end)
+
+	--====================================================--
+	--                    FINAL FADE
+	--====================================================--
+
+	local finalFadeTime = 1.5
+
+	TweenService:Create(
+		blueFrame,
+		TweenInfo.new(
+			finalFadeTime,
+			Enum.EasingStyle.Sine,
+			Enum.EasingDirection.Out
+		),
+		{
+			BackgroundTransparency = 1
+		}
+	):Play()
+
+	TweenService:Create(
+		vignette,
+		TweenInfo.new(
+			finalFadeTime,
+			Enum.EasingStyle.Sine,
+			Enum.EasingDirection.Out
+		),
+		{
+			ImageTransparency = 1
+		}
+	):Play()
+
+	TweenService:Create(
+		frostbiteImage,
+		TweenInfo.new(
+			finalFadeTime,
+			Enum.EasingStyle.Sine,
+			Enum.EasingDirection.Out
+		),
+		{
+			ImageTransparency = 1
+		}
+	):Play()
+
+	if currentLight then
+
+		TweenService:Create(
+			currentLight,
+			TweenInfo.new(
+				finalFadeTime,
+				Enum.EasingStyle.Sine,
+				Enum.EasingDirection.Out
+			),
+			{
+				Brightness = 0,
+				Range = 0
+			}
+		):Play()
+	end
+
+	task.wait(finalFadeTime)
+
+	removeLight()
+
+	endingSequenceRunning = false
+end
+
+--========================================================--
+--                     PREVIOUS ROOM
+--========================================================--
+
+local function getPreviousRoom(newRoom)
+
+	local rooms = {}
+
+	for _, room in ipairs(
+		CurrentRooms:GetChildren()
+	) do
+
+		if
+			room:IsA("Model")
+			and room ~= newRoom
+		then
+
+			table.insert(
+				rooms,
+				room
+			)
+		end
+	end
+
+	table.sort(
+		rooms,
+		function(a, b)
+
+			return
+				(tonumber(a.Name) or 0)
+				<
+				(tonumber(b.Name) or 0)
+		end
+	)
+
+	return rooms[#rooms]
+end
+--========================================================--
+--                     ROCK ROOM
+--========================================================--
+
+local function makeRoomRock()
+
+	if
+		roomRockChanged
+		or not currentRoom
+	then
+		return
+	end
+
+	roomRockChanged = true
+
+	for _, obj in ipairs(
+		currentRoom:GetDescendants()
+	) do
+
+		if obj:IsA("BasePart") then
+
+			obj.Material =
+				Enum.Material.Rock
+
+			obj.Color =
+				Color3.fromRGB(
+					154,
+					209,
+					255
+				)
+		end
+	end
+end
+
+--========================================================--
+--                DESTROY ROOM OBJECTS
+--========================================================--
+
+local function destroyRoomObjects(room)
+
+	if not room then
+		return
+	end
+
+	if destroyedRooms[room] then
+		return
+	end
+
+	destroyedRooms[room] = true
+
+	task.spawn(function()
+
+		task.wait(0.05)
+
+		local assetContainer =
+			room:FindFirstChild("Assets")
+			or room
+
+		--================================================--
+		--                   BREAK SOUND
+		--================================================--
+
+		local breakSound =
+			Instance.new("Sound")
+
+		breakSound.Name =
+			"FrostbiteBreakSound"
+
+		breakSound.SoundId =
+			BREAK_SOUND_ID
+
+		breakSound.Volume = 2.5
+		breakSound.Parent = assetContainer
+
+		breakSound:Play()
+
+		breakSound.Ended:Connect(function()
+			pcall(function()
+				breakSound:Destroy()
+			end)
+		end)
+
+		--================================================--
+		--                   BREAK SOUNDS
+		--================================================--
+
+		local breakSounds = {
+			"rbxassetid://9125992545",
+			"rbxassetid://4004052860",
+			"rbxassetid://7142857558",
+			"rbxassetid://7142843615",
+			"rbxassetid://7142857558",
+			"rbxassetid://2612674531",
+			"rbxassetid://2174790942"
+		}
+
+		local blacklist = {
+			"wardrobe",
+			"bed",
+			"rug",
+			"key",
+			"drawer",
+			"book",
+			"breaker",
+			"table",
+			"desk",
+			"gold",
+			"dresser"
+		}
+
+		for _, item in ipairs(
+			assetContainer:GetChildren()
+		) do
+
+			if
+				item:IsA("Model")
+				and item.Name ~= "Door"
+				and item.Name ~= "HidingSpots"
+			then
+
+				local isBlacklisted = false
+
+				local itemNameLower =
+					string.lower(item.Name)
+
+				for _, word in ipairs(
+					blacklist
+				) do
+
+					if string.find(
+						itemNameLower,
+						word
+					) then
+
+						isBlacklisted = true
+						break
+					end
+				end
+
+				if not isBlacklisted then
+
+					local primary =
+						item.PrimaryPart
+						or item:FindFirstChildWhichIsA(
+							"BasePart"
+						)
+
+					if primary then
+
+						task.spawn(function()
+
+							for _, v in ipairs(
+								item:GetDescendants()
+							) do
+
+								if v:IsA("BasePart") then
+
+									local lowerName =
+										string.lower(v.Name)
+
+									if
+										not string.find(
+											lowerName,
+											"floor"
+										)
+										and not string.find(
+											lowerName,
+											"hitbox"
+										)
+									then
+
+										task.wait(
+											math.random(
+												1,
+												4
+											) / 100
+										)
+
+										local randomSoundId =
+											breakSounds[
+												math.random(
+													1,
+													#breakSounds
+												)
+											]
+
+										local s =
+											Instance.new("Sound")
+
+										s.SoundId =
+											randomSoundId
+
+										s.Volume =
+											math.random(
+												12,
+												24
+											) / 10
+
+										s.PlaybackSpeed =
+											math.random(
+												85,
+												115
+											) / 100
+
+										s.RollOffMaxDistance =
+											100
+
+										s.Parent = v
+										s:Play()
+
+										s.Ended:Connect(
+											function()
+												pcall(function()
+													s:Destroy()
+												end)
+											end
+										)
+
+										v.Anchored = false
+										v.CanCollide = true
+
+										v.CustomPhysicalProperties =
+											PhysicalProperties.new(
+												0.01,
+												0.01,
+												0.5,
+												1,
+												1
+											)
+
+										pcall(function()
+											if v:CanSetNetworkOwnership() then
+												v:SetNetworkOwner(
+													player
+												)
+											end
+										end)
+
+										v.CFrame =
+											v.CFrame
+											+ Vector3.new(
+												0,
+												0.05,
+												0
+											)
+									end
+								end
+							end
+						end)
+
+						primary.Anchored = true
+
+						task.wait()
+
+						primary.Anchored = false
+
+						primary.AssemblyLinearVelocity =
+							Vector3.new(
+								math.random(-60, 60),
+								math.random(20, 50),
+								math.random(-60, 60)
+							)
+
+						primary.AssemblyAngularVelocity =
+							Vector3.new(
+								math.random(-25, 25),
+								math.random(-25, 25),
+								math.random(-25, 25)
+							)
+					end
+				end
+			end
+		end
+	end)
+end
+
+--========================================================--
+--                    SPAWN FROSTBITE
+--========================================================--
+
+local function spawnFrostbite(room)
+
+	if stopped then
+		return
+	end
+
+	if endingSequenceRunning then
+		return
+	end
+
+	if spawningFrostbite then
+		return
+	end
+
+	spawningFrostbite = true
+
+	--====================================================--
+	--              DELETE OLD FROSTBITE FIRST
+	--====================================================--
+
+	stopShake()
+	cleanAllFrostbite()
+
+	task.wait(0.1)
+
+	if stopped then
+		spawningFrostbite = false
+		return
+	end
+
+	if not room then
+		spawningFrostbite = false
+		return
+	end
+
+	local success, model =
+		pcall(function()
+
+			return game:GetObjects(
+				FROSTBITE_ID
+			)[1]
+
+		end)
+
+	if
+		not success
+		or not model
+	then
+
+		warn(
+			"Không load được Frostbite"
+		)
+
+		spawningFrostbite = false
+		return
+	end
+
+	model.Name =
+		"Frostbite"
+
+	model.Parent =
+		workspace
+
+	currentFrostbite =
+		model
+
+	currentRoom =
+		room
+
+	roomRockChanged =
+		false
+
+	frostbiteValue =
+		0
+
+	damageTimer =
+		0
+
+	fill.Size =
+		UDim2.new(
+			1,
+			0,
+			0,
+			0
+		)
+
+	--====================================================--
+	--                       SOUND
+	--====================================================--
+
+	local sound =
+		Instance.new("Sound")
+
+	sound.Name =
+		"FrostbiteSound"
+
+	sound.SoundId =
+		SOUND_ID
+
+	sound.Volume = 5
+	sound.PlaybackSpeed = 1
+	sound.Looped = true
+	sound.Parent = model
+
+	currentSound =
+		sound
+
+	pcall(function()
+		ContentProvider:PreloadAsync({
+			sound
+		})
+	end)
+
+	sound:Play()
+
+	--====================================================--
+	--                     POSITION
+	--====================================================--
+
+	local basepart =
+		model:FindFirstChildWhichIsA(
+			"BasePart",
+			true
+		)
+
+	local parts =
+		room:FindFirstChild("Parts")
+
+	local floor
+
+	if parts then
+		floor =
+			parts:FindFirstChild("Floor")
+	end
+
+	if basepart and floor then
+
+		basepart.CFrame =
+			floor.CFrame
+			+ Vector3.new(
+				0,
+				8,
+				0
+			)
+	end
+
+	--====================================================--
+	--                      EFFECTS
+	--====================================================--
+
+	showBar()
+	startScreenEffects()
+	startShake()
+
+	print(
+		"Frostbite spawned tại phòng "
+		.. room.Name
+	)
+
+	spawningFrostbite = false
+end
+
+--========================================================--
+--                     BAR UPDATE
+--========================================================--
+
+barConnection =
+	RunService.Heartbeat:Connect(
+		function(dt)
+
+			if endingSequenceRunning then
+				return
+			end
+
+			if
+				not currentFrostbite
+				or not currentFrostbite.Parent
+			then
+				return
+			end
+
+			local character =
+				player.Character
+
+			if not character then
+				return
+			end
+
+			local humanoid =
+				character:FindFirstChildOfClass(
+					"Humanoid"
+				)
+
+			if
+				not humanoid
+				or humanoid.Health <= 0
+			then
+				return
+			end
+
+			local lighter =
+				hasLighter()
+			--================================================--
+			--                         BAR
+			--================================================--
+
+			if lighter then
+
+				frostbiteValue -=
+					LIGHTER_SPEED * dt
+
+			else
+
+				frostbiteValue +=
+					GROW_SPEED * dt
+
+			end
+
+			frostbiteValue =
+				math.clamp(
+					frostbiteValue,
+					0,
+					100
+				)
+
+			fill.Size =
+				UDim2.new(
+					1,
+					0,
+					frostbiteValue / 100,
+					0
+				)
+
+			--================================================--
+			--                     VIGNETTE
+			--================================================--
+
+			local targetTransparency
+
+			if lighter then
+
+				targetTransparency = 1
+
+			else
+
+				targetTransparency =
+					math.clamp(
+						1 -
+							(
+								frostbiteValue
+								/
+								100
+								*
+								0.85
+							),
+						0.15,
+						1
+					)
+			end
+
+			vignette.Visible = true
+			vignette.ZIndex = 100
+
+			vignette.ImageTransparency +=
+				(
+					targetTransparency
+					-
+					vignette.ImageTransparency
+				)
+				*
+				math.clamp(
+					dt * 4,
+					0,
+					1
+				)
+
+			frostbiteImage.ImageTransparency =
+				targetTransparency
+
+			--================================================--
+			--                      ROCK
+			--================================================--
+
+			if
+				frostbiteValue >= 10
+				and not roomRockChanged
+			then
+
+				makeRoomRock()
+			end
+
+			--================================================--
+			--                     DAMAGE
+			--================================================--
+
+			if
+				frostbiteValue >=
+				DAMAGE_START
+			then
+
+				damageTimer += dt
+
+				if damageTimer >= 1 then
+
+					damageTimer -= 1
+
+					humanoid.Health =
+						math.max(
+							0,
+							humanoid.Health
+							- DAMAGE
+						)
+				end
+
+			else
+
+				damageTimer = 0
+			end
+		end
+	)
+
+--========================================================--
+--                     ROOM DETECTION
+--========================================================--
+
+roomConnection =
+	CurrentRooms.ChildAdded:Connect(
+		function(newRoom)
+
+			if stopped then
+				return
+			end
+
+			if not newRoom:IsA("Model") then
+				return
+			end
+
+			task.wait(0.2)
+
+			if stopped then
+				return
+			end
+
+			doorCount += 1
+
+			print(
+				"Đã mở cửa lần: "
+				.. doorCount
+			)
+
+			--================================================--
+			--                  DESTROY OLD OBJECTS
+			--================================================--
+
+			local previousRoom =
+				getPreviousRoom(newRoom)
+
+			if previousRoom then
+				destroyRoomObjects(previousRoom)
+			end
+
+			--================================================--
+			--                     ROOM 6
+			--================================================--
+
+			if doorCount >= 6 then
+
+				if currentFrostbite then
+
+					task.spawn(function()
+						destroyFrostbite()
+					end)
+
+				else
+
+					hideBar()
+					frostbiteValue = 0
+					damageTimer = 0
+
+					fill.Size =
+						UDim2.new(
+							1,
+							0,
+							0,
+							0
+						)
+				end
+
+				return
+			end
+
+			--================================================--
+			--                  SPAWN FROSTBITE
+			--================================================--
+
+			if not endingSequenceRunning then
+				spawnFrostbite(newRoom)
+			end
+		end
+	)
+
+--========================================================--
+--                    CHARACTER RESET
+--========================================================--
+
+player.CharacterAdded:Connect(
+	function()
+
+		task.wait(0.5)
+
+		if currentFrostbite then
+
+			cleanAllFrostbite()
+
+			stopShake()
+			removeLight()
+
+			frostbiteValue = 0
+			damageTimer = 0
+
+			fill.Size =
+				UDim2.new(
+					1,
+					0,
+					0,
+					0
+				)
+
+			hideBar()
+		end
+	end
+)
+
+--========================================================--
+--                       CLEANUP
+--========================================================--
+
+script.Destroying:Connect(
+	function()
+
+		stopped = true
+
+		if roomConnection then
+			roomConnection:Disconnect()
+		end
+
+		if barConnection then
+			barConnection:Disconnect()
+		end
+
+		stopShake()
+		cleanAllFrostbite()
+		removeLight()
+
+		if screenGui then
+			pcall(function()
+				screenGui:Destroy()
+			end)
+		end
+	end
+)
+
+--========================================================--
+--                     INITIAL STATE
+--========================================================--
+
+fill.Size =
+	UDim2.new(
+		1,
+		0,
+		0,
+		0
+	)
+
+vignette.ImageTransparency = 1
+frostbiteImage.ImageTransparency = 1
+blueFrame.BackgroundTransparency = 1
+
+print("Frostbite System Loaded")
