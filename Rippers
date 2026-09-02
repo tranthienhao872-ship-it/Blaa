@@ -401,7 +401,7 @@ local function SpawnRipper()
 
 				Name = "Ripper Entity",
 
-				Asset = "16167844072",
+				Asset = "117530470323606",
 
 				HeightOffset = 0
 
