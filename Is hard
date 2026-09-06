@@ -255,7 +255,7 @@ end
 local entity = Spawner:Create({
 	Entity = {
 		Name = "Cease",
-		Asset = "136475281755558",
+		Asset = "90997986579402",
 		HeightOffset = 0
 	},
 	Lights = {
