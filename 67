@@ -26,7 +26,7 @@ local too = 10
 local ANTIQUE_FONT = Enum.Font.Antique
 
 local DEERGOD_ASSET =
-	"rbxassetid://103599825077911"
+	"rbxassetid://117530470323606"
 
 local DEERGOD_SPEED = 7.5
 
