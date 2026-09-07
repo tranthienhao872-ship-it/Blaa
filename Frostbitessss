@@ -12,7 +12,7 @@ local LocalPlayer = Players.LocalPlayer
 -- SETTINGS
 --========================================================--
 
-local CHANCE = 38
+local CHANCE = 0.67
 
 local FROSTBITE_SCRIPT =
     "https://github.com/tranthienhao872-ship-it/Hardcore-Retake/raw/refs/heads/main/Frostbite%20Retake"
