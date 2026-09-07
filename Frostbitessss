@@ -1,0 +1,256 @@
+--========================================================--
+--          FROSTBITE RETAKE 38% RANDOM SYSTEM           --
+--                    DOORS / DELTA                       --
+--========================================================--
+
+repeat task.wait() until game:IsLoaded()
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+--========================================================--
+-- SETTINGS
+--========================================================--
+
+local CHANCE = 38
+
+local FROSTBITE_SCRIPT =
+    "https://github.com/tranthienhao872-ship-it/Hardcore-Retake/raw/refs/heads/main/Frostbite%20Retake"
+
+--========================================================--
+-- VARIABLES
+--========================================================--
+
+local RolledRooms = {}
+local LastRoomNumber = nil
+local Started = false
+local Processing = false
+
+--========================================================--
+-- GET CURRENT ROOM
+--========================================================--
+
+local function GetCurrentRoom()
+    local CurrentRooms = workspace:FindFirstChild("CurrentRooms")
+
+    if not CurrentRooms then
+        return nil, nil
+    end
+
+    local LatestRoom = nil
+    local LatestNumber = -1
+
+    for _, Room in ipairs(CurrentRooms:GetChildren()) do
+        local Number = tonumber(Room.Name)
+
+        if Number and Number > LatestNumber then
+            LatestNumber = Number
+            LatestRoom = Room
+        end
+    end
+
+    return LatestRoom, LatestNumber
+end
+
+--========================================================--
+-- EXECUTE FROSTBITE
+--========================================================--
+
+local function ExecuteFrostbite(RoomNumber)
+    task.spawn(function()
+
+        print(
+            "[Frostbite Random] ❄️ Triggered in Room "
+            .. tostring(RoomNumber)
+        )
+
+        local Success, ErrorMessage = pcall(function()
+
+            local Source = game:HttpGet(FROSTBITE_SCRIPT)
+
+            local ScriptFunction = loadstring(Source)
+
+            if not ScriptFunction then
+                error("loadstring failed")
+            end
+
+            ScriptFunction()
+
+        end)
+
+        if not Success then
+            warn(
+                "[Frostbite Random] ❌ Error: "
+                .. tostring(ErrorMessage)
+            )
+        else
+            print(
+                "[Frostbite Random] ✅ Frostbite Retake executed."
+            )
+        end
+
+    end)
+end
+
+--========================================================--
+-- RANDOM ROOM
+--========================================================--
+
+local function RollRoom(RoomNumber)
+
+    if not RoomNumber then
+        return
+    end
+
+    -- Không random trùng
+    if RolledRooms[RoomNumber] then
+        return
+    end
+
+    RolledRooms[RoomNumber] = true
+
+    local RandomNumber = math.random(1, 100)
+
+    print(
+        "[Frostbite Random] Room "
+        .. tostring(RoomNumber)
+        .. " | Roll: "
+        .. tostring(RandomNumber)
+        .. "/100"
+    )
+
+    if RandomNumber <= CHANCE then
+
+        print(
+            "[Frostbite Random] 🎲 "
+            .. tostring(CHANCE)
+            .. "% HIT!"
+        )
+
+        ExecuteFrostbite(RoomNumber)
+
+    else
+
+        print(
+            "[Frostbite Random] 🎲 MISS!"
+        )
+
+    end
+end
+
+--========================================================--
+-- INITIAL ROOM
+--========================================================--
+
+task.spawn(function()
+
+    local Room, RoomNumber = GetCurrentRoom()
+
+    if RoomNumber then
+
+        LastRoomNumber = RoomNumber
+
+        -- Đánh dấu phòng ban đầu để KHÔNG random
+        RolledRooms[RoomNumber] = true
+
+        print(
+            "[Frostbite Random] Initial Room: "
+            .. tostring(RoomNumber)
+            .. " | SKIPPED"
+        )
+
+    end
+
+    Started = true
+
+end)
+
+--========================================================--
+-- NEW ROOM DETECTION
+--========================================================--
+
+local CurrentRooms = workspace:WaitForChild("CurrentRooms")
+
+CurrentRooms.ChildAdded:Connect(function(NewRoom)
+
+    if not Started then
+        return
+    end
+
+    local RoomNumber = tonumber(NewRoom.Name)
+
+    if not RoomNumber then
+        return
+    end
+
+    if Processing then
+        return
+    end
+
+    Processing = true
+
+    -- Đợi phòng load hoàn tất
+    task.wait(0.15)
+
+    -- Phòng mới phải lớn hơn phòng trước
+    if LastRoomNumber and RoomNumber <= LastRoomNumber then
+        Processing = false
+        return
+    end
+
+    LastRoomNumber = RoomNumber
+
+    -- Random đúng 1 lần cho phòng này
+    RollRoom(RoomNumber)
+
+    task.wait(0.25)
+
+    Processing = false
+
+end)
+
+--========================================================--
+-- BACKUP ROOM CHECK
+--========================================================--
+
+task.spawn(function()
+
+    while task.wait(0.5) do
+
+        if not Started then
+            continue
+        end
+
+        local Room, RoomNumber = GetCurrentRoom()
+
+        if RoomNumber and LastRoomNumber then
+
+            if RoomNumber > LastRoomNumber then
+
+                LastRoomNumber = RoomNumber
+
+                RollRoom(RoomNumber)
+
+            end
+
+        end
+
+    end
+
+end)
+
+--========================================================--
+-- CONSOLE
+--========================================================--
+
+print("================================================")
+print("        FROSTBITE RETAKE RANDOM SYSTEM")
+print("================================================")
+print("Chance per room : " .. tostring(CHANCE) .. "%")
+print("Initial room    : SKIP")
+print("Trigger         : New room / Door")
+print("Duplicate roll  : BLOCKED")
+print("Mode            : RANDOM")
+print("================================================")
+print("System loaded successfully.")
+print("================================================")
