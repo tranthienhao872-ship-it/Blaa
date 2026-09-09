@@ -1,7 +1,4 @@
---========================================================--
---                    DEERGOD SYSTEM                     --
---                 FULL MERGED VERSION                   --
---========================================================--
+--======óc cặc=====--
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
