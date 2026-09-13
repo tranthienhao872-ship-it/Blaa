@@ -86,7 +86,7 @@ task.spawn(function()
 		Spawned = { ChangeColorWhenSpawn = false, Rainbow = false, Color = Color3.fromRGB(0, 85, 255) },
 		CameraShake = { Enabled = false, Range = 100, Values = { 1.5, 20, 0.1, 1 } },
 		Movement = {
-			Speed = 9999, Delay = 20, Reversed = false, EndWhenEnterLatestRoom = true,
+			Speed = 9999, Delay = 2, Reversed = false, EndWhenEnterLatestRoom = true,
 			EndDelay = 2.5, ReboundMoving = false, TweenSecond = 1.5, ReboundMoveStyle = false,
 			ReboundStyleTimes = 3, ReboundStyleSound = "rbxassetid://130994177179386", ReboundStyleVolume = 5
 		},
