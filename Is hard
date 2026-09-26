@@ -271,20 +271,20 @@ local entity = Spawner:Create({
 	},
 	CameraShake = {
 		Enabled = true,
-		Range = 100,
+		Range = 150,
 		Values = {1.5, 30, 0.1, 1} -- Magnitude, Roughness, FadeIn, FadeOut
 	},
 	Movement = {
 		Speed = 85,
-		Delay = 5.5,
+		Delay = 4.3,
 		Reversed = false
 	},
 	Rebounding = {
-		Enabled = false,
-		Type = "Ambush", -- "Blitz"
+		Enabled = true,
+		Type = "Blitz", -- "Blitz"
 		Min = 1,
 		Max = 1,
-		Delay = 2
+		Delay = 0
 	},
 	Damage = {
 		Enabled = true,
