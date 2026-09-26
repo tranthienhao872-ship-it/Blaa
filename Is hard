@@ -255,7 +255,7 @@ end
 local entity = Spawner:Create({
 	Entity = {
 		Name = "Cease",
-		Asset = "https://github.com/tranthienhao872-ship-it/Blaa/raw/refs/heads/main/model%2010959918411%20Studio%20Lite%20WorkspaceCeaseStopping.rbxmx",
+		Asset = "https://github.com/tranthienhao872-ship-it/Hardcore-Retake/raw/refs/heads/main/model%2010959918411%20Studio%20Lite%20WorkspaceCeaseMovingggg.rbxmx",
 		HeightOffset = 0
 	},
 	Lights = {
