@@ -375,10 +375,10 @@ local function SpawnReboundEntity()
 		},
 		Rebounding = {
 			Enabled = true,
-			Type = "Ambush",
+			Type = "Blitz",
 			Min = 1,
 			Max = 2,
-			Delay = 1.5
+			Delay = 2.3
 		},
 		Damage = {
 			Enabled = true,
