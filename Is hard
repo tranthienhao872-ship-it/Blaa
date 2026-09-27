@@ -1046,6 +1046,72 @@ entity:SetCallback(
 ---====== OnStartMoving ======---
 
 entity:SetCallback(
+    "OnSpawned",
+    function()
+
+        print(
+            "[Cease] Entity has spawned"
+        )
+
+        -- 🔊 2 SOUND PHÁT CÙNG LÚC
+        PlaySpawnSounds()
+
+        -- Kiểm tra The Mines
+        StartMinesReverbCheck()
+
+        isEntityActive = true
+
+        movePenaltyEnabled = false
+
+        ceaseInPlayerRoom = false
+
+        ceaseRebounding = false
+
+        lastAttributeState = nil
+
+        SetEntityDamageAttribute(false)
+
+        StartMoveScan()
+
+        local fadeTween =
+            FadeTo(
+                BLUE_VISIBLE_TRANSPARENCY,
+                FADE_DURATION
+            )
+
+        FadeLight(
+            LIGHT_MAX_BRIGHTNESS,
+            FADE_DURATION
+        )
+
+        task.spawn(function()
+
+            if fadeTween then
+
+                fadeTween.Completed:Wait()
+
+            else
+
+                task.wait(
+                    FADE_DURATION
+                )
+            end
+
+            if isEntityActive then
+
+                movePenaltyEnabled = true
+
+                print(
+                    "[Cease] Movement detection ENABLED"
+                )
+            end
+        end)
+    end
+)
+
+---====== OnStartMoving ======---
+
+entity:SetCallback(
     "OnStartMoving",
     function()
 
@@ -1056,4 +1122,241 @@ entity:SetCallback(
     end
 )
 
----==
+---====== OnEnterRoom ======---
+
+entity:SetCallback(
+    "OnEnterRoom",
+    function(
+        room: Model,
+        firstTime: boolean
+    )
+
+        if firstTime then
+
+            print(
+                "[Cease] Entered room:",
+                room.Name
+            )
+
+        else
+
+            print(
+                "[Cease] Entered room again:",
+                room.Name
+            )
+        end
+
+        task.defer(function()
+
+            if not isEntityActive then
+                return
+            end
+
+            if ceaseRebounding then
+                return
+            end
+
+            local playerRoom =
+                GetPlayerRoom()
+
+            if playerRoom == room then
+
+                ceaseInPlayerRoom = true
+
+                print(
+                    "[Cease] SAME ROOM -> STAND STILL"
+                )
+
+            else
+
+                ceaseInPlayerRoom = false
+
+                SetEntityDamageAttribute(
+                    false
+                )
+
+                lastAttributeState = false
+
+                print(
+                    "[Cease] DIFFERENT ROOM -> SAFE"
+                )
+            end
+        end)
+    end
+)
+
+---====== OnLookAt ======---
+
+entity:SetCallback(
+    "OnLookAt",
+    function(
+        lineOfSight: boolean
+    )
+
+        if lineOfSight then
+
+            print(
+                "[Cease] Player looking at entity"
+            )
+
+        else
+
+            print(
+                "[Cease] Player view obstructed"
+            )
+        end
+    end
+)
+
+---====== OnRebounding ======---
+
+entity:SetCallback(
+    "OnRebounding",
+    function(
+        startOfRebound: boolean
+    )
+
+        if startOfRebound then
+
+            -- REBOUND START
+            ceaseRebounding = true
+
+            -- TẮT DAMAGE NGAY
+            SetEntityDamageAttribute(false)
+
+            lastAttributeState = false
+
+            print(
+                "[Cease] REBOUND START -> DAMAGE OFF"
+            )
+
+        else
+
+            -- REBOUND END
+            ceaseRebounding = false
+
+            -- Xóa trạng thái damage cũ
+            SetEntityDamageAttribute(false)
+
+            lastAttributeState = false
+
+            print(
+                "[Cease] REBOUND END -> CHECK ON"
+            )
+        end
+    end
+)
+
+---====== OnDespawning ======---
+
+entity:SetCallback(
+    "OnDespawning",
+    function()
+
+        print(
+            "[Cease] Entity is despawning"
+        )
+
+        isEntityActive = false
+        movePenaltyEnabled = false
+        ceaseInPlayerRoom = false
+        ceaseRebounding = false
+
+        StopMoveScan()
+
+        FadeTo(
+            1,
+            FADE_DURATION
+        )
+
+        FadeLight(
+            0,
+            FADE_DURATION
+        )
+    end
+)
+
+---====== OnDespawned ======---
+
+entity:SetCallback(
+    "OnDespawned",
+    function()
+
+        print(
+            "[Cease] Entity has despawned"
+        )
+
+        isEntityActive = false
+        movePenaltyEnabled = false
+        ceaseInPlayerRoom = false
+        ceaseRebounding = false
+
+        StopMoveScan()
+
+        if blueFrame
+            and blueFrame.Parent then
+
+            blueFrame.BackgroundTransparency = 1
+        end
+
+        if screenGui
+            and screenGui.Parent then
+
+            screenGui:Destroy()
+        end
+
+        if blueLight then
+
+            blueLight.Brightness = 0
+
+            blueLight:Destroy()
+
+            blueLight = nil
+        end
+
+        -- Dừng reverb
+        if minesReverb then
+            minesReverb.Enabled = false
+        end
+
+        -- Dừng 2 sound nếu vẫn còn phát
+        if spawnSound1 then
+            spawnSound1:Stop()
+        end
+
+        if spawnSound2 then
+            spawnSound2:Stop()
+        end
+
+        entityModel = nil
+    end
+)
+
+---====== OnDamagePlayer ======---
+
+entity:SetCallback(
+    "OnDamagePlayer",
+    function(
+        newHealth: number
+    )
+
+        if newHealth <= 0 then
+
+            print(
+                "[Cease] Entity killed player"
+            )
+
+        else
+
+            print(
+                "[Cease] Entity damaged player"
+            )
+        end
+    end
+)
+
+---====== Run Entity ======---
+
+CreateSpawnSounds()
+
+entity:Run(true)
