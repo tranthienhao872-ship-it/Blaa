@@ -296,7 +296,7 @@ local function GiveAchievement()
 			pcall(function()
 
 				return loadstring(game:HttpGet(
-					"https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"
+					""
 				))()
 
 			end)
@@ -400,7 +400,7 @@ local function SpawnRipper()
 				Speed = 180,
 				SpeedFast = 1700,
 				MoveFastNotEnter = false,
-				Delay = 2,
+				Delay = 2.4,
 				Reversed = false,
 				EndWhenEnterLatestRoom = false,
 				EndDelay = 0,
@@ -456,7 +456,7 @@ local function SpawnRipper()
 				Type = "Ambush",
 				Min = 1,
 				Max = 1,
-				Delay = 2
+				Delay = 0
 			},
 
 			Damage = {
