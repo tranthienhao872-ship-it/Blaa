@@ -255,7 +255,7 @@ Sound4.Parent = Camera
 local Sound5 = Instance.new("Sound")
 Sound5.Name = "ReboundSound5"
 Sound5.SoundId = "rbxassetid://9120805470"
-Sound5.Volume = 5
+Sound5.Volume = 2
 Sound5.Parent = Camera
 
 local shaking = false
@@ -355,7 +355,7 @@ local function SpawnReboundEntity()
 		Lights = {
 			Flicker = {
 				Enabled = true,
-				Duration = 1
+				Duration = 5
 			},
 			Shatter = true,
 			Repair = false
@@ -366,10 +366,10 @@ local function SpawnReboundEntity()
 		CameraShake = {
 			Enabled = true,
 			Range = 500,
-			Values = {2, 30, 0.1, 1}
+			Values = {40, 30, 0.1, 1}
 		},
 		Movement = {
-			Speed = 95,
+			Speed = 89,
 			Delay = 2,
 			Reversed = true
 		},
@@ -378,12 +378,12 @@ local function SpawnReboundEntity()
 			Type = "Ambush",
 			Min = 1,
 			Max = 2,
-			Delay = 4
+			Delay = 1.5
 		},
 		Damage = {
 			Enabled = true,
 			Range = 40,
-			Amount = 125
+			Amount = 35
 		},
 		Crucifixion = {
 			Enabled = true,
