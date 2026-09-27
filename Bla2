@@ -357,7 +357,7 @@ local function SpawnReboundEntity()
 				Enabled = true,
 				Duration = 5
 			},
-			Shatter = true,
+			Shatter = false,
 			Repair = false
 		},
 		Earthquake = {
@@ -366,7 +366,7 @@ local function SpawnReboundEntity()
 		CameraShake = {
 			Enabled = true,
 			Range = 500,
-			Values = {40, 30, 0.1, 1}
+			Values = {6, 30, 0.1, 1}
 		},
 		Movement = {
 			Speed = 89,
@@ -377,13 +377,13 @@ local function SpawnReboundEntity()
 			Enabled = true,
 			Type = "Blitz",
 			Min = 1,
-			Max = 2,
-			Delay = 2.3
+			Max = 3,
+			Delay = 4.3
 		},
 		Damage = {
 			Enabled = true,
 			Range = 40,
-			Amount = 35
+			Amount = 45
 		},
 		Crucifixion = {
 			Enabled = true,
