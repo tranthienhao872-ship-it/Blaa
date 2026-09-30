@@ -397,13 +397,13 @@ local function SpawnRipper()
 			},
 
 			Movement = {
-				Speed = 180,
+				Speed = 267,
 				SpeedFast = 1700,
 				MoveFastNotEnter = false,
-				Delay = 2.4,
+				Delay = 5.2,
 				Reversed = false,
 				EndWhenEnterLatestRoom = false,
-				EndDelay = 0,
+				EndDelay = 1.9,
 
 				ReboundMoving = false,
 				TweenSecond = 1.5,
