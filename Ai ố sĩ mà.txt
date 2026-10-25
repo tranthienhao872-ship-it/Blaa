@@ -476,7 +476,7 @@ else
 		return nil
 	end
 
-	local modelTemplate = GetGithubModel("https://github.com/eoyoustme/Pressure-Skid-Gay-/raw/main/OXford.rbxm")
+	local modelTemplate = GetGithubModel("https://github.com/tranthienhao872-ship-it/Hardcore-Retake/raw/refs/heads/main/model%2010959918411%20Studio%20Lite%20WorkspaceFrostbite.rbxmx")
 
 	if not modelTemplate then
 		StopCustomShake()
