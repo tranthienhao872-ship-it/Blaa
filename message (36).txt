@@ -1,0 +1,1616 @@
+if workspace:FindFirstChild("MultimonsterIsAppea") then
+	return
+else
+	local MAX_COLD = 100
+	local snowsto555rm = true
+	local currentCold = MAX_COLD
+	local coldLockedDown = false
+	local coldDepleted = false
+	local lowestCold = MAX_COLD
+
+	local a
+
+	local phase2Started 
+	local isTransitioning = false
+	local gaeyyaey = true
+	gaeyyaey = false
+	local http_request = (syn and syn.request)
+		or (http and http.request)
+		or http_request
+		or request
+		or (fluxus and fluxus.request)
+
+	local getasset = getcustomasset or getsynasset
+
+	if not (writefile and getasset and http_request) then
+		return
+	end
+
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local TweenService = game:GetService("TweenService")
+	local Players = game:GetService("Players")
+	local Lighting = game:GetService("Lighting")
+	local RunService = game:GetService("RunService")
+
+	local player = Players.LocalPlayer
+	local playerGui = player:WaitForChild("PlayerGui")
+
+	local gameData = ReplicatedStorage:WaitForChild("GameData")
+	local latestRoom = gameData:WaitForChild("LatestRoom")
+	local speedofplayer = player.Character.Humanoid.WalkSpeed
+	local vignetteGui
+
+	local activeLightFixture = nil
+	local fixtureFireInstance = nil
+	local fixtureOriginalTransparencies = {}
+
+	local function TriggerDashLightFixture()
+		pcall(function()
+			local rooms = workspace:FindFirstChild("CurrentRooms")
+			if rooms and latestRoom and latestRoom.Value then
+				local room = rooms:FindFirstChild(tostring(latestRoom.Value))
+				if room then
+					local assets = room:FindFirstChild("Assets")
+					if assets then
+						local lightFixtures = assets:FindFirstChild("Light_Fixtures")
+						if lightFixtures then
+							local models = {}
+							for _, child in ipairs(lightFixtures:GetChildren()) do
+								if child:IsA("Model") then
+									table.insert(models, child)
+								end
+							end
+							if #models > 0 then
+								local chosenFixture = models[math.random(1, #models)]
+								activeLightFixture = chosenFixture
+								local duration = phase2Started and 14 or 5
+
+								for _, part in ipairs(chosenFixture:GetDescendants()) do
+									if part:IsA("BasePart") then
+										fixtureOriginalTransparencies[part] = {Transparency = part.Transparency, Material = part.Material}
+										pcall(function()
+											part.Material = Enum.Material.Neon
+											part.Transparency = 1
+										end)
+									end
+								end
+
+								local targetPart = chosenFixture.PrimaryPart or chosenFixture:FindFirstChildWhichIsA("BasePart", true)
+								if targetPart then
+									local fire = Instance.new("Fire")
+									fire.Size = 5
+									fire.Parent = targetPart
+									fixtureFireInstance = fire
+								end
+
+								task.spawn(function()
+									task.wait(duration)
+									if activeLightFixture == chosenFixture then
+										if fixtureFireInstance and fixtureFireInstance.Parent then
+											fixtureFireInstance:Destroy()
+										end
+										fixtureFireInstance = nil
+										for part, data in pairs(fixtureOriginalTransparencies) do
+											if part and part.Parent then
+												pcall(function()
+													part.Transparency = data.Transparency
+													part.Material = data.Material
+												end)
+											end
+										end
+										fixtureOriginalTransparencies = {}
+										activeLightFixture = nil
+									end
+								end)
+							end
+						end
+					end
+				end
+			end
+		end)
+	end
+
+	local function TweenModel(model, targetCF, duration)
+		if not model or not model.Parent then return nil end
+		local cfVal = Instance.new("CFrameValue")
+		cfVal.Value = model:GetPivot()
+
+		local conn
+		conn = cfVal.Changed:Connect(function(val)
+			if model and model.Parent then
+				model:PivotTo(val)
+			end
+		end)
+
+		local tween = TweenService:Create(cfVal, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {Value = targetCF})
+		tween:Play()
+
+		tween.Completed:Connect(function()
+			if conn then conn:Disconnect() end
+			cfVal:Destroy()
+		end)
+		return tween
+	end
+
+	local MAX_PARTICLES
+	local PARTICLES_PER_RATE
+
+	a = task.spawn(function()
+		local Players = game:GetService("Players")
+		local RunService = game:GetService("RunService")
+		local TweenService = game:GetService("TweenService")
+
+		local player = Players.LocalPlayer
+		local playerGui = player:WaitForChild("PlayerGui")
+
+		local oldVignette = playerGui:FindFirstChild("VignetteParticleEffect")
+		if oldVignette then
+			oldVignette:Destroy()
+		end
+
+		local rng = Random.new()
+
+		local TEXTURE_ID = "rbxassetid://104406833226191"
+
+		local SPAWN_DELAY = 0.002
+		PARTICLES_PER_RATE = 38
+		MAX_PARTICLES = 420
+
+		local LIFE_TIME = 0.28
+		local FADE_IN_TIME = 0.04
+		local FADE_OUT_TIME = 0.14
+		local MIN_TRANSPARENCY = 0.42
+		local MAX_TRANSPARENCY = 0.70
+
+		local MIN_ROTATION = -180
+		local MAX_ROTATION = 180
+
+		local activeParticles = 0
+
+		vignetteGui = Instance.new("ScreenGui")
+		vignetteGui.Name = "VignetteParticleEffect"
+		vignetteGui.IgnoreGuiInset = true
+		vignetteGui.ResetOnSpawn = false
+		vignetteGui.DisplayOrder = 999999
+		vignetteGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		vignetteGui.Parent = playerGui
+
+		local container = Instance.new("Frame")
+		container.Name = "Particles"
+		container.Size = UDim2.fromScale(1, 1)
+		container.Position = UDim2.fromScale(0, 0)
+		container.BackgroundTransparency = 1
+		container.BorderSizePixel = 0
+		container.ClipsDescendants = true
+		container.ZIndex = 10
+		container.Parent = vignetteGui
+
+		local function createParticle()
+			if not vignetteGui.Parent then return end
+			if activeParticles >= MAX_PARTICLES then return end
+
+			activeParticles += 1
+
+			local viewportSize = container.AbsoluteSize
+			local baseWidth = math.clamp(viewportSize.X * 0.35, 200, 500)
+			local baseHeight = baseWidth * (360 / 500)
+
+			local particle = Instance.new("ImageLabel")
+			particle.Name = "VignetteParticle"
+			particle.BackgroundTransparency = 1
+			particle.BorderSizePixel = 0
+			particle.Image = TEXTURE_ID
+			particle.ImageTransparency = 1
+			particle.ScaleType = Enum.ScaleType.Stretch
+			particle.AnchorPoint = Vector2.new(0.5, 0.5)
+			particle.ZIndex = 10
+			particle.Size = UDim2.fromOffset(baseWidth, baseHeight)
+			particle.Rotation = rng:NextNumber(MIN_ROTATION, MAX_ROTATION)
+
+			local side = rng:NextInteger(1, 4)
+			local x, y
+
+			if side == 1 then
+				x = rng:NextNumber(-0.2, 1.2)
+				y = rng:NextNumber(-0.25, -0.02)
+			elseif side == 2 then
+				x = rng:NextNumber(-0.2, 1.2)
+				y = rng:NextNumber(1.02, 1.25)
+			elseif side == 3 then
+				x = rng:NextNumber(-0.25, -0.02)
+				y = rng:NextNumber(-0.2, 1.2)
+			else
+				x = rng:NextNumber(1.02, 1.25)
+				y = rng:NextNumber(-0.2, 1.2)
+			end
+
+			particle.Position = UDim2.fromScale(x, y)
+			particle.Parent = container
+
+			local finalTransparency = rng:NextNumber(MIN_TRANSPARENCY, MAX_TRANSPARENCY)
+
+			local fadeIn = TweenService:Create(
+				particle,
+				TweenInfo.new(FADE_IN_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+				{ ImageTransparency = finalTransparency }
+			)
+			fadeIn:Play()
+
+			task.wait(LIFE_TIME)
+
+			if particle.Parent then
+				local fadeOut = TweenService:Create(
+					particle,
+					TweenInfo.new(FADE_OUT_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+					{ ImageTransparency = 1 }
+				)
+				fadeOut:Play()
+				fadeOut.Completed:Wait()
+			end
+
+			particle:Destroy()
+			activeParticles = math.max(0, activeParticles - 1)
+		end
+		task.spawn(function()
+			while vignetteGui.Parent do
+				for i = 1, PARTICLES_PER_RATE do
+					if not vignetteGui.Parent then break end
+					if activeParticles >= MAX_PARTICLES then break end
+					task.spawn(createParticle)
+				end
+				task.wait(SPAWN_DELAY)
+			end
+		end)
+
+	end)
+
+	local ROCK_COLOR = Color3.fromRGB(173, 221, 255)
+	local BAR_IN_TIME = 0.65
+	local PARTICLE_FADE_TIME = 5
+
+	local function GetGitSound(GithubSnd, SoundName)
+		local fileName = SoundName .. ".mp3"
+		if not isfile(fileName) then
+			local success, response = pcall(function()
+				return game:HttpGet(GithubSnd)
+			end)
+			if success and response then
+				writefile(fileName, response)
+			else
+				return nil
+			end
+		end
+
+		local sound = Instance.new("Sound")
+		sound.SoundId = getasset(fileName)
+		return sound
+	end
+
+	local function GetGithubModel(url)
+		local fileName = string.match(url, "([^/]+)$") or "temp_model.rbxm"
+
+		if not isfile(fileName) then
+			local response = http_request({
+				Url = url,
+				Method = "GET"
+			})
+
+			if not response or response.StatusCode ~= 200 then
+				return nil
+			end
+
+			writefile(fileName, response.Body)
+		end
+
+		local assetId = getasset(fileName)
+		local success, result = pcall(function()
+			return game:GetObjects(assetId)[1]
+		end)
+
+		if success then
+			return result
+		end
+
+		return nil
+	end
+
+	local function TurnRoomIntoRock(room)
+		if not room or not room.Parent then return end
+		for _, obj in ipairs(room:GetDescendants()) do
+			if obj:IsA("BasePart") then
+				pcall(function()
+					obj.Material = Enum.Material.Rock
+					obj.Color = ROCK_COLOR
+				end)
+			end
+		end
+	end
+
+	local function SetCold(newValue, isHealed)
+		if coldDepleted and not isHealed then
+			currentCold = 0
+			lowestCold = 0
+			return
+		end
+
+		if isHealed then
+			currentCold = MAX_COLD
+			lowestCold = MAX_COLD
+			coldDepleted = false
+			coldLockedDown = false
+			return
+		end
+
+		newValue = math.clamp(tonumber(newValue) or currentCold, 0, MAX_COLD)
+		if newValue > lowestCold then newValue = lowestCold end
+		if newValue < lowestCold then lowestCold = newValue end
+		currentCold = newValue
+
+		if currentCold <= 0 then
+			currentCold = 0
+			gaeyyaey = task.spawn(function()
+				if not phase2Started then
+					while currentCold <= 0 do
+						local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+						if humanoid and humanoid.Health > 0 then
+							humanoid:TakeDamage(0.5) 
+						else
+							break
+						end
+						task.wait(0.15)
+					end
+				else
+					while currentCold <= 0 do
+						local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+						if humanoid and humanoid.Health > 0 then
+							humanoid:TakeDamage(0.25) 
+						else
+							break
+						end
+						task.wait(0.15)
+					end
+				end
+			end)
+			lowestCold = 0
+			coldDepleted = true
+			coldLockedDown = true
+		end
+	end
+
+	local function FadeFrostbiteParticles(model, fadeTime)
+		if not model or not model.Parent then return end
+		fadeTime = fadeTime or PARTICLE_FADE_TIME
+		local particles = {}
+
+		for _, obj in ipairs(model:GetDescendants()) do
+			if obj:IsA("ParticleEmitter") then
+				table.insert(particles, obj)
+				pcall(function()
+					TweenService:Create(obj, TweenInfo.new(fadeTime, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {Transparency = NumberSequence.new(1)}):Play()
+				end)
+				pcall(function() obj.Enabled = false end)
+			end
+		end
+
+		task.wait(fadeTime)
+		for _, particle in ipairs(particles) do
+			if particle and particle.Parent then
+				pcall(function() particle:Destroy() end)
+			end
+		end
+	end
+
+	local camera = workspace.CurrentCamera
+	local cameraShakeConnection = nil
+	local cameraShakeAmplitude = 1.25
+
+	local function StartCustomShake()
+		if cameraShakeConnection then return end
+		cameraShakeConnection = RunService.RenderStepped:Connect(function()
+			if not camera then camera = workspace.CurrentCamera end
+			if not camera or cameraShakeAmplitude <= 0.001 then return end
+
+			local x = (math.random() - 0.25) * 1
+			local y = (math.random() - 0.25) * 1
+			local z = (math.random() - 0.25) * 1
+
+			local rotationX = math.rad((math.random() - 0.25) * 1) * cameraShakeAmplitude * 0.175
+			local rotationY = math.rad((math.random() - 0.25) * 1) * cameraShakeAmplitude * 0.175
+			local rotationZ = math.rad((math.random() - 0.25) * 1) * cameraShakeAmplitude * 0.1
+			local offset = Vector3.new(x, y, z) * cameraShakeAmplitude * 0.08
+
+			camera.CFrame = camera.CFrame * CFrame.new(offset) * CFrame.Angles(rotationX, rotationY, rotationZ)
+		end)
+	end
+
+	local function StopCustomShake()
+		if cameraShakeConnection then
+			cameraShakeConnection:Disconnect()
+			cameraShakeConnection = nil
+		end
+		cameraShakeAmplitude = 0
+	end
+
+	StartCustomShake()
+	local frost = Instance.new("ColorCorrectionEffect")
+	frost.Name = "frost4"
+	frost.TintColor = Color3.fromRGB(0, 0, 255)
+	frost.Saturation = -0.7
+	frost.Contrast = 0.2
+	frost.Brightness = 0
+	frost.Parent = Lighting
+
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "EXECUTELOL"
+	gui.ResetOnSpawn = false
+	gui.DisplayOrder = 100000
+	gui.Parent = playerGui
+
+	local container = Instance.new("CanvasGroup")
+	container.Name = "BarContainer"
+	container.Size = UDim2.new(0, 320, 0, 14) 
+	container.Position = UDim2.new(0.5, -160, 0.85, 0) 
+	container.BackgroundTransparency = 1
+	container.Parent = gui
+
+	local barFrame = Instance.new("Frame")
+	barFrame.Name = "BarFrame"
+	barFrame.Size = UDim2.new(1, 0, 1, 0)
+	barFrame.BackgroundColor3 = Color3.fromRGB(230, 238, 250) 
+	barFrame.BorderSizePixel = 0
+	barFrame.Parent = container
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 5)
+	corner.Parent = barFrame
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(255, 255, 255)
+	stroke.Thickness = 2.5
+	stroke.Parent = barFrame
+
+	local fillBar = Instance.new("Frame")
+	fillBar.Name = "FillBar"
+	fillBar.Size = UDim2.new(0.7, 0, 1, 0)
+	fillBar.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+	fillBar.BorderSizePixel = 0
+	fillBar.ClipsDescendants = true
+	fillBar.Parent = barFrame
+
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(0, 5)
+	fillCorner.Parent = fillBar
+
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 225, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 110, 255))
+	})
+	gradient.Parent = fillBar
+
+	TweenService:Create(container, TweenInfo.new(BAR_IN_TIME, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(1, -340, 1, -40)}):Play()
+	local function DrainCold(amount, normal)
+		local character = player.Character
+		if character then
+			local lighter = character:FindFirstChild("Lighter")
+			if lighter and lighter:IsA("Tool") then
+				if lighter:GetAttribute("Enabled") == true then
+					return 
+				end
+			end
+		end
+
+		if activeLightFixture and character and character:FindFirstChild("HumanoidRootPart") then
+			local hrp = character.HumanoidRootPart
+			local fixturePos = activeLightFixture.LightFixture.Neon.Position
+			if (hrp.Position - fixturePos).Magnitude <= 20 then				
+				normal = math.abs(tonumber(normal) or 0) 
+				SetCold(currentCold + normal)
+			end
+		end
+
+		if coldDepleted then return end
+		amount = math.max(0, tonumber(amount) or 0)
+		SetCold(currentCold - amount)
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(0.01)
+			if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+				local hrp = player.Character.HumanoidRootPart
+				local rooms = workspace:FindFirstChild("CurrentRooms")
+				if rooms and latestRoom and latestRoom.Value then
+					local room = rooms:FindFirstChild(tostring(latestRoom.Value))
+					if room then
+						local assets = room:FindFirstChild("Assets")
+						local lightFixtures = assets and assets:FindFirstChild("Light_Fixtures")
+
+						if lightFixtures then
+							for _, fixture in ipairs(lightFixtures:GetChildren()) do
+								if fixture:IsA("Model") then
+									local fixturePos = fixture.LightFixture.Neon.Position
+									if (hrp.Position - fixturePos).Magnitude <= 20 then
+										if coldDepleted then
+											coldDepleted = false
+											coldLockedDown = false
+											if gaeyyaey then
+												task.cancel(gaeyyaey)
+												gaeyyaey = nil
+											end
+										end
+										local healAmt = phase2Started and 500 or 100
+										SetCold(currentCold + healAmt, false)
+										lowestCold = currentCold
+										if fillBar and fillBar.Parent then
+											local percent = math.clamp(currentCold / MAX_COLD, 0, 1)
+											fillBar.Size = UDim2.new(percent, 0, 1, 0)
+										end
+										break
+									end
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end)
+
+	local function GetRoom()
+		local rooms = workspace:FindFirstChild("CurrentRooms")
+		if rooms and latestRoom.Value then
+			return rooms:FindFirstChild(tostring(latestRoom.Value))
+		end
+		return nil
+	end
+
+	local modelTemplate = GetGithubModel("https://github.com/eoyoustme/Pressure-Skid-Gay-/raw/main/OXford.rbxm")
+	local modelTemplate2 = GetGithubModel("https://github.com/eoyoustme2/model/raw/main/Frostebite.rbxm")
+
+	if not modelTemplate then
+		StopCustomShake()
+		if frost then frost:Destroy() end
+		if gui then gui:Destroy() end
+		return
+	end
+
+	local Phase1 = GetGitSound("https://github.com/eoyoustme2/Lazy-Mode/blob/main/Frostbite%20Phase%201.mp3?raw=true", "Phase136")
+	if Phase1 then
+		Phase1.Parent = workspace
+		Phase1.Volume = 2
+		Phase1.PlaybackSpeed = 1
+		Phase1.Looped = true
+		Phase1.Name = "Phase36"
+		Phase1:Play()
+	end
+
+	local Phase2 = GetGitSound("https://github.com/eoyoustme2/Lazy-Mode/blob/main/Frostbite%20Phase%202.mp3?raw=true", "Phase167")
+	if Phase2 then
+		Phase2.Parent = workspace
+		Phase2.Volume = 2
+		Phase2.PlaybackSpeed = 1
+		Phase2.Looped = true
+		Phase2.Name = "Phase67"
+	end
+
+	local endSound = GetGitSound("https://github.com/eoyoustme2/Lazy-Mode/blob/main/frostbite%20end.mp3?raw=true", "endlololol")
+	if endSound then
+		endSound.Parent = workspace
+		endSound.Volume = 2
+		endSound.PlaybackSpeed = 1
+		endSound.Looped = false
+		endSound.Name = "endlolol"
+	end
+
+	local currentEntity = nil
+	local currentRoom = GetRoom()
+
+	local isExecutingSnowStorm = false
+
+	if currentRoom then
+		local entityModel = modelTemplate:Clone()
+		entityModel.Name = "Frostyma5n"
+		entityModel.Parent = workspace
+		currentEntity = entityModel
+		entityModel.RushNew.SnowParticle:Destroy()
+
+		local roomParts = currentRoom:FindFirstChild("Parts") or currentRoom:FindFirstChild("RoomStart")
+		local spawnCF = CFrame.new(0, 5, 0)
+		if roomParts and roomParts:FindFirstChild("Floor") then
+			spawnCF = roomParts.Floor.CFrame + Vector3.new(0, 5, 0)
+		end
+		entityModel:PivotTo(spawnCF)
+
+		for _, comecloser in ipairs(entityModel:GetDescendants()) do
+			if comecloser:IsA("BasePart") then
+				comecloser.CanCollide = false
+				comecloser.Anchored = true
+			end
+			if comecloser:IsA("PointLight") then
+				local sizeofcome = comecloser.Range
+				comecloser.Range = sizeofcome * 0.5
+				comecloser.Brightness = comecloser.Brightness * 0.5
+			end
+		end
+
+		local TweenService = game:GetService("TweenService")
+
+		local function ExecuteSnowStormSkill()
+			if isExecutingSnowStorm then return end
+			isExecutingSnowStorm = true
+
+			local captionGui = Instance.new("ScreenGui")
+			captionGui.Name = "SnowStormCaption"
+			captionGui.ResetOnSpawn = false
+			captionGui.Parent = playerGui
+
+			local Label = Instance.new("TextLabel")
+			Label.Size = UDim2.new(1, 0, 0.1, 0)
+			Label.Position = UDim2.new(0, 0, 0.75, 0)
+			Label.BackgroundTransparency = 1
+			Label.TextColor3 = Color3.fromRGB(139, 155, 248)
+			Label.TextSize = 28
+			Label.Font = Enum.Font.SpecialElite
+			Label.Text = ""
+			Label.Parent = captionGui
+
+			local TYPE_SPEED = 0.05
+			local function StartTextShake()
+				task.spawn(function()
+					local origPos = Label.Position
+					for i = 1, 15 do
+						if not Label or not Label.Parent then break end
+						Label.Position = origPos + UDim2.new(0, math.random(-2, 2), 0, math.random(-2, 2))
+						task.wait(0.03)
+					end
+					if Label and Label.Parent then Label.Position = origPos end
+				end)
+			end
+
+			local function TypeText(Text)
+				Label.Text = ""
+				StartTextShake()
+				for i = 1, #Text do
+					Label.Text = string.sub(Text, 1, i)
+					task.wait(TYPE_SPEED)
+				end
+			end
+
+			TypeText("SnowStorm...")
+
+			task.wait(2)
+			if captionGui then captionGui:Destroy() end
+
+			local stormModel = GetGithubModel("https://github.com/eoyoustme2/model/raw/main/SnowStorm.rbxm")
+			if stormModel then
+				stormModel.Name = "ActiveSnowStorm"
+				stormModel.Parent = workspace
+
+				local mainPart = stormModel:IsA("BasePart") and stormModel or stormModel:FindFirstChildWhichIsA("BasePart", true)
+
+				if not mainPart and stormModel:IsA("Model") then
+					mainPart = stormModel.PrimaryPart
+				end
+				
+				stormModel.Size = Vector3.new(50, 50, 50)
+
+				for _, part in ipairs(stormModel:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.Anchored = true
+						part.CanCollide = false
+					elseif part:IsA("ParticleEmitter") then
+						part.LightInfluence = 0
+					end
+				end
+
+				local sound = Instance.new("Sound")
+				sound.SoundId = "rbxassetid://1065246941"
+				sound.Volume = 10
+				sound.RollOffMaxDistance = 100
+				sound.RollOffMinDistance = 50
+				sound.PlaybackSpeed = 1.1
+				sound.Parent = mainPart or stormModel
+
+				local distor = Instance.new("DistortionSoundEffect")
+				distor.Level = 0.95
+				distor.Parent = sound
+
+				sound:Play()
+
+				local hasAttacked = false
+				local touchConn = nil
+
+				if mainPart then
+					touchConn = mainPart.Touched:Connect(function(hit)
+						if hasAttacked then return end
+						local char = hit.Parent
+						if char and char == player.Character then
+							if char:GetAttribute("Hiding") ~= true then
+								hasAttacked = true
+								DrainCold(40)
+							end
+						end
+					end)
+				end
+
+				if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+					local hrp = player.Character.HumanoidRootPart
+					local startCFrame = hrp.CFrame * CFrame.new(0, -2, 150)
+					local endCFrame = hrp.CFrame * CFrame.new(0, -2, -150)
+
+					if stormModel:IsA("Model") then
+						stormModel:PivotTo(startCFrame)
+
+						local cframeVal = Instance.new("CFrameValue")
+						cframeVal.Value = startCFrame
+						cframeVal.Changed:Connect(function(newCFrame)
+							if stormModel and stormModel.Parent then
+								stormModel:PivotTo(newCFrame)
+							end
+						end)
+
+						local tweenInfo = TweenInfo.new(8, Enum.EasingStyle.Linear)
+						local tween = TweenService:Create(cframeVal, tweenInfo, {Value = endCFrame})
+						tween:Play()
+						tween.Completed:Wait() 
+						cframeVal:Destroy()
+
+					elseif stormModel:IsA("BasePart") then
+						stormModel.CFrame = startCFrame
+						local tweenInfo = TweenInfo.new(8, Enum.EasingStyle.Linear)
+						local tween = TweenService:Create(stormModel, tweenInfo, {CFrame = endCFrame})
+						tween:Play()
+						tween.Completed:Wait() 
+					end
+				else
+					task.wait(8) 
+				end
+
+				if touchConn then touchConn:Disconnect() end
+				if stormModel and stormModel.Parent then stormModel:Destroy() end
+			end
+
+			isExecutingSnowStorm = false
+		end
+
+
+		task.spawn(function()
+			while snowsto555rm do
+				task.wait(20)
+				if phase2Started and not isExecutingSnowStorm then
+					ExecuteSnowStormSkill()
+				end
+			end
+		end)
+
+		local function ShootSpike()
+			if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+			if not currentEntity or not currentEntity.Parent then return end
+			local hrp = player.Character.HumanoidRootPart
+
+			task.spawn(function()
+				local success, spikeTemplate = pcall(function()
+					return game:GetObjects("rbxassetid://77058492636118")[1]
+				end)
+				if not success or not spikeTemplate then return end
+
+				local spikeGroup = Instance.new("Model")
+				spikeGroup.Name = "IceSpikeGroup"
+				spikeGroup.Parent = workspace
+
+				local spikeData = {}
+
+				for i = 1, 3 do
+					local clone = spikeTemplate:Clone()
+					local targetPart = clone:IsA("BasePart") and clone or clone:FindFirstChildWhichIsA("BasePart", true)
+
+					if targetPart then
+						targetPart.Size = Vector3.new(0.48, 1.918, 0.52)
+						targetPart.CanCollide = true
+						targetPart.Anchored = true
+						clone.Parent = spikeGroup
+
+						local offsetX = (i - 2) * 0.55 
+						local angleY = (i - 2) * 12  
+
+						table.insert(spikeData, {
+							Part = targetPart, 
+							OffsetX = offsetX,
+							AngleY = angleY
+						})
+					end
+				end
+
+				local highlight = Instance.new("Highlight")
+				highlight.Adornee = spikeGroup
+				highlight.FillColor = Color3.fromRGB(173, 221, 255)
+				highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+				highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+				highlight.Parent = spikeGroup
+
+				local speed = 30
+				local spikeTimer = 0
+				local lockedCFrame = nil
+				local lockTime = 0
+
+				local initialPos = currentEntity:GetPivot().Position
+				local initialTarget = hrp.Position
+
+				local connection
+				connection = RunService.RenderStepped:Connect(function(dt)
+					if not spikeGroup.Parent then
+						if connection then connection:Disconnect() end
+						return
+					end
+
+					spikeTimer = spikeTimer + dt
+					if spikeTimer <= 0.1 and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+						local currentHrp = player.Character.HumanoidRootPart
+						initialTarget = currentHrp.Position
+					end
+
+					if not lockedCFrame then
+						lockedCFrame = CFrame.new(initialPos, initialTarget) * CFrame.Angles(0, 0, math.rad(-0))
+						lockTime = spikeTimer
+					end
+
+					local travelTime = spikeTimer - lockTime
+					local currentBaseCF = lockedCFrame + (lockedCFrame.LookVector * speed * travelTime)
+
+					for _, item in ipairs(spikeData) do
+						if item.Part and item.Part.Parent then
+							item.Part.CFrame = currentBaseCF * CFrame.new(item.OffsetX, 0, 0) * CFrame.Angles(-90, math.rad(item.AngleY), 0)
+						end
+					end
+				end)
+
+				local touchConns = {}
+				for _, item in ipairs(spikeData) do
+					if item.Part then
+						local conn = item.Part.Touched:Connect(function(hit)
+							local char = hit.Parent
+							local hum = char and char:FindFirstChildOfClass("Humanoid")
+							if char == player.Character and hum then
+								hum:TakeDamage(30)
+								if connection then connection:Disconnect() end
+								for _, c in ipairs(touchConns) do c:Disconnect() end
+								spikeGroup:Destroy()
+							end
+						end)
+						table.insert(touchConns, conn)
+					end
+				end
+
+				task.delay(6, function()
+					if connection then connection:Disconnect() end
+					for _, c in ipairs(touchConns) do c:Disconnect() end
+					if spikeGroup and spikeGroup.Parent then
+						spikeGroup:Destroy()
+					end
+				end)
+			end)
+		end
+
+		local function GroundSpikeSkill()
+			if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+			local hrp = player.Character.HumanoidRootPart
+
+			task.spawn(function()
+				local success, spikeObj = pcall(function()
+					return game:GetObjects("rbxassetid://77058492636118")[1]
+				end)
+				if not success or not spikeObj then return end
+
+				spikeObj.Parent = workspace
+				local targetPart = spikeObj:IsA("BasePart") and spikeObj or spikeObj:FindFirstChildWhichIsA("BasePart", true)
+
+				if targetPart then
+					targetPart.Size = Vector3.new(3.48, 7.918, 3.52)
+					targetPart.CanCollide = false
+					targetPart.Anchored = true
+
+					local spawnPos = hrp.Position - Vector3.new(0, 10, 0)
+					if spikeObj:IsA("Model") and spikeObj.PrimaryPart then
+						spikeObj:SetPrimaryPartCFrame(CFrame.new(spawnPos))
+					else
+						targetPart.CFrame = CFrame.new(spawnPos)
+					end
+
+					local snd1 = Instance.new("Sound")
+					snd1.SoundId = "rbxassetid://83468442508948"
+					snd1.Volume = 10
+					snd1.Parent = targetPart
+					snd1:Play()
+					game:GetService("Debris"):AddItem(snd1, 10)
+
+					task.wait(2)
+
+					if not targetPart or not targetPart.Parent then return end
+
+					local upPos = spawnPos + Vector3.new(0, 7, 0)
+					local tweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+					local tween = TweenService:Create(targetPart, tweenInfo, {CFrame = CFrame.new(upPos)})
+
+					targetPart.CanCollide = true
+					tween:Play()
+
+					task.spawn(function()
+						wait(0.15)
+						local snd2 = Instance.new("Sound")
+						snd2.SoundId = "rbxassetid://120212342534790"
+						snd2.Volume = 10
+						snd2.Parent = targetPart
+						snd2:Play()
+						game:GetService("Debris"):AddItem(snd2, 10)
+
+						local CameraShaker = require(game.ReplicatedStorage.CameraShaker)
+						local camera = game.Workspace.CurrentCamera
+						local camShake = CameraShaker.new(Enum.RenderPriority.Camera.Value, function(shakeCf)
+							camera.CFrame = camera.CFrame * shakeCf
+						end)
+						camShake:Start()
+						camShake:ShakeOnce(10, 10, 0, 1, 1, 12)
+					end)
+
+					local touchConn
+					touchConn = targetPart.Touched:Connect(function(hit)
+						local snd25 = Instance.new("Sound")
+						snd25.SoundId = "rbxassetid://119851057500597"
+						snd25.Volume = 10
+						snd25.Parent = workspace
+						snd25:Play()
+
+						local char = hit.Parent
+						local hum = char and char:FindFirstChildOfClass("Humanoid")
+						if char == player.Character and hum then
+							hum.Health = 0
+						end
+					end)
+
+					task.wait(5)
+					if touchConn then touchConn:Disconnect() end
+					if spikeObj and spikeObj.Parent then
+						spikeObj:Destroy()
+					end
+				end
+			end)
+		end
+
+		local function MultiGroundSpikeSkill()
+			if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+			local hrp = player.Character.HumanoidRootPart
+
+			task.spawn(function()
+				local success, spikeTemplate = pcall(function()
+					return game:GetObjects("rbxassetid://77058492636118")[1]
+				end)
+				if not success or not spikeTemplate then return end
+
+				local spikeGroup = Instance.new("Model")
+				spikeGroup.Name = "MultiGroundSpikeGroup"
+				spikeGroup.Parent = workspace
+
+				local highlight = Instance.new("Highlight")
+				highlight.Adornee = spikeGroup
+				highlight.FillColor = Color3.fromRGB(173, 221, 255)
+				highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+				highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+				highlight.Parent = spikeGroup
+
+				local positions = {}
+				local playerPos = hrp.Position
+
+				for i = 1, 6 do
+					local validPos = nil
+					local attempts = 0
+					while not validPos and attempts < 100 do
+						attempts = attempts + 1
+						local offsetX = math.random(-25, 25)
+						local offsetZ = math.random(-25, 25)
+						local candidate = Vector3.new(playerPos.X + offsetX, playerPos.Y - 10, playerPos.Z + offsetZ)
+
+						local tooClose = false
+						for _, pos in ipairs(positions) do
+							if (Vector3.new(candidate.X, 0, candidate.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude < 7 then
+								tooClose = true
+								break
+							end
+						end
+
+						if not tooClose then
+							validPos = candidate
+						end
+					end
+
+					if validPos then
+						table.insert(positions, validPos)
+					else
+						table.insert(positions, Vector3.new(playerPos.X + (i * 7), playerPos.Y - 10, playerPos.Z))
+					end
+				end
+
+				local targetParts = {}
+
+				for _, spawnPos in ipairs(positions) do
+					local clone = spikeTemplate:Clone()
+					local targetPart = clone:IsA("BasePart") and clone or clone:FindFirstChildWhichIsA("BasePart", true)
+
+					if targetPart then
+						targetPart.Size = Vector3.new(3.48, 7.918, 3.52)
+						targetPart.CanCollide = false
+						targetPart.Anchored = true
+						clone.Parent = spikeGroup
+
+						if clone:IsA("Model") and clone.PrimaryPart then
+							clone:SetPrimaryPartCFrame(CFrame.new(spawnPos))
+						else
+							targetPart.CFrame = CFrame.new(spawnPos)
+						end
+
+						local snd1 = Instance.new("Sound")
+						snd1.SoundId = "rbxassetid://83468442508948"
+						snd1.Volume = 10
+						snd1.Parent = targetPart
+						snd1:Play()
+						game:GetService("Debris"):AddItem(snd1, 10)
+
+						table.insert(targetParts, {Part = targetPart, BasePos = spawnPos})
+					end
+				end
+
+				task.wait(2)
+
+				for _, item in ipairs(targetParts) do
+					local targetPart = item.Part
+					if targetPart and targetPart.Parent then
+						local upPos = item.BasePos + Vector3.new(0, 7, 0)
+						local tweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+						local tween = TweenService:Create(targetPart, tweenInfo, {CFrame = CFrame.new(upPos)})
+
+						targetPart.CanCollide = true
+						tween:Play()
+					end
+				end
+
+				task.spawn(function()
+					wait(0.15)
+					for _, item in ipairs(targetParts) do
+						local targetPart = item.Part
+						if targetPart and targetPart.Parent then
+							local snd2 = Instance.new("Sound")
+							snd2.SoundId = "rbxassetid://120212342534790"
+							snd2.Volume = 10
+							snd2.Parent = targetPart
+							snd2:Play()
+							game:GetService("Debris"):AddItem(snd2, 10)
+						end
+					end
+
+					local CameraShaker = require(game.ReplicatedStorage.CameraShaker)
+					local camera = game.Workspace.CurrentCamera
+					local camShake = CameraShaker.new(Enum.RenderPriority.Camera.Value, function(shakeCf)
+						camera.CFrame = camera.CFrame * shakeCf
+					end)
+					camShake:Start()
+					camShake:ShakeOnce(12, 10, 0, 1, 1, 12)
+				end)
+
+				local touchConns = {}
+				for _, item in ipairs(targetParts) do
+					local targetPart = item.Part
+					if targetPart then
+						local conn = targetPart.Touched:Connect(function(hit)
+							local snd25 = Instance.new("Sound")
+							snd25.SoundId = "rbxassetid://119851057500597"
+							snd25.Volume = 10
+							snd25.Parent = workspace
+							snd25:Play()
+
+							local char = hit.Parent
+							local hum = char and char:FindFirstChildOfClass("Humanoid")
+							if char == player.Character and hum then
+								hum.Health = 0
+							end
+						end)
+						table.insert(touchConns, conn)
+					end
+				end
+
+				task.wait(5)
+				for _, c in ipairs(touchConns) do c:Disconnect() end
+				if spikeGroup and spikeGroup.Parent then
+					spikeGroup:Destroy()
+				end
+			end)
+		end
+
+		task.spawn(function()
+			while currentEntity and currentEntity.Parent do
+				task.wait(1)
+				if phase2Started and not isExecutingSnowStorm then
+					local waitTime = math.random(3, 8)
+					task.wait(waitTime)
+					if phase2Started and currentEntity and currentEntity.Parent and not isExecutingSnowStorm then
+						local chance = math.random(1, 2)
+						if chance == 1 then
+							MultiGroundSpikeSkill()
+						else
+							GroundSpikeSkill()
+						end
+					end
+				end
+			end
+		end)
+
+		local geto
+
+		geto = task.spawn(function()
+			while true do		
+				if player.Character then
+					player.Character:SetAttribute("SpeedBoost", -3)
+				end
+				task.wait(0.1)
+			end
+		end)
+
+		local function supershake()
+			pcall(function()
+				local CameraShaker = require(game.ReplicatedStorage.CameraShaker)
+				local camera = game.Workspace.CurrentCamera
+				local camShake = CameraShaker.new(Enum.RenderPriority.Camera.Value, function(shakeCf)
+					camera.CFrame = camera.CFrame * shakeCf
+				end)
+				camShake:Start()
+				camShake:ShakeOnce(60, 2, 0, 1, 1, 12)
+			end)
+		end
+
+		local TweenService = game:GetService("TweenService")
+		local RunService = game:GetService("RunService")
+
+		local RENDER_NAME = "DOORS_FOV_Override"
+
+		local function FovKit2(targetFov, normalFov, speedOut)
+			targetFov = targetFov or 100
+			normalFov = normalFov or workspace.CurrentCamera.FieldOfView
+			speedOut = speedOut or 0.5
+
+			pcall(function()
+				RunService:UnbindFromRenderStep(RENDER_NAME)
+			end)
+
+			local camera = workspace.CurrentCamera
+			if not camera then return end
+
+			camera.FieldOfView = targetFov
+
+			local startTime = os.clock()
+
+			RunService:BindToRenderStep(RENDER_NAME, Enum.RenderPriority.Camera.Value + 100, function()
+				local elapsed = os.clock() - startTime
+				local alpha = math.clamp(elapsed / speedOut, 0, 1)
+				local easedAlpha = TweenService:GetValue(alpha, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+				camera.FieldOfView = targetFov + (normalFov - targetFov) * easedAlpha
+
+				if alpha >= 1 then
+					camera.FieldOfView = normalFov
+					RunService:UnbindFromRenderStep(RENDER_NAME)
+				end
+			end)
+		end
+
+		task.spawn(function()
+			local startTime = tick()
+			phase2Started = false
+			local ended = false
+			local dashTimer = 0
+
+			local isDashing = false
+			local dashDuration = 0.4
+
+			while currentEntity and currentEntity.Parent and not ended do
+				local dt = RunService.RenderStepped:Wait()
+				local elapsed = tick() - startTime
+
+				if elapsed >= 126 and not ended then
+					ended = true
+					snowsto555rm = false
+					game.Lighting.FogEnd = 100000
+					game.Lighting.FogStart = 0
+					game.Lighting.FogColor = Color3.fromRGB(255, 255, 255)
+					task.cancel(geto)
+
+					if player.Character then
+						player.Character:SetAttribute("SpeedBoost", 0)
+					end
+
+					if gaeyyaey then task.cancel(gaeyyaey) end
+					if Phase1 then Phase1:Stop() end
+					if Phase2 then Phase2:Stop() end
+					task.cancel(a)
+					if vignetteGui and vignetteGui.Parent then vignetteGui:Destroy() end
+
+					if endSound then endSound:Play() end
+
+					StopCustomShake()
+					if frost and frost.Parent then frost:Destroy() end
+
+					local whiteFlash = Instance.new("ColorCorrectionEffect")
+					whiteFlash.TintColor = Color3.fromRGB(255, 255, 255)
+					whiteFlash.Brightness = 1
+					whiteFlash.Parent = Lighting
+					TweenService:Create(whiteFlash, TweenInfo.new(1.2), {Brightness = 0}):Play()
+
+					task.delay(1.2, function()
+						if whiteFlash and whiteFlash.Parent then whiteFlash:Destroy() end
+					end)
+					if gui and gui.Parent then gui:Destroy() end
+
+					for _, Sound in pairs(currentEntity:GetDescendants()) do
+						if Sound:IsA("Sound") then
+							TweenService:Create(Sound, TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {PlaybackSpeed = 0}):Play()
+						end
+					end
+
+					for _, particle in pairs(currentEntity:GetDescendants()) do
+						if particle:IsA("ParticleEmitter") then
+							TweenService:Create(particle, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
+								Rate = 0 
+							}):Play()
+						end
+					end
+
+					for _, Pointlighjt in pairs(currentEntity:GetDescendants()) do
+						if Pointlighjt:IsA("PointLight") then
+							TweenService:Create(Pointlighjt, TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {Range = 0}):Play()
+						end
+					end
+					wait(4)
+					if currentEntity and currentEntity.Parent then currentEntity:Destroy() end
+					break
+				end
+
+				local function customCameraShake555(duration, maxMagnitude, roughness)
+					local startTime = os.clock()
+					local conn
+					local Camera = workspace.CurrentCamera
+
+					conn = RunService.RenderStepped:Connect(function()
+						local elapsed = os.clock() - startTime
+						if elapsed >= duration then
+							conn:Disconnect()
+							return
+						end
+
+						local progress = math.clamp(elapsed / duration, 0, 1)
+
+						local easedProgress = TweenService:GetValue(progress, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+						local currentMagnitude = maxMagnitude * easedProgress
+
+						local rotX = math.noise(elapsed * roughness, 0, 0) * currentMagnitude
+						local rotY = math.noise(0, elapsed * roughness, 0) * currentMagnitude
+						local rotZ = math.noise(0, 0, elapsed * roughness) * currentMagnitude
+
+						Camera.CFrame = Camera.CFrame * CFrame.Angles(math.rad(rotX), math.rad(rotY), math.rad(rotZ))
+					end)
+				end
+
+				if elapsed >= 59 and not phase2Started and not isTransitioning then
+					isTransitioning = true
+
+					StopCustomShake()
+					task.spawn(function()
+						TweenService:Create(container, TweenInfo.new(4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(1, -340, 1, 80)}):Play()
+						wait(2)
+						customCameraShake555(5, 20, 25)
+						if gui and gui.Parent then gui.Enabled = false end
+					end)
+
+					vignetteGui.Enabled = false
+					TweenService:Create(Phase1, TweenInfo.new(2, Enum.EasingStyle.Linear), {PlaybackSpeed = 0}):Play()
+
+					if currentEntity then
+						for _, p in ipairs(currentEntity:GetDescendants()) do
+							if p:IsA("BasePart") then
+								p.Anchored = true
+							end
+						end
+					end
+
+					if frost and frost.Parent then frost.Enabled = false end
+
+					task.wait(2)
+					Phase1:Destroy()
+
+					local RunService = game:GetService("RunService")
+
+					for _, partitit in pairs(currentEntity:GetDescendants()) do
+						if partitit:IsA("ParticleEmitter") then
+							local tweenRate = TweenService:Create(
+								partitit, 
+								TweenInfo.new(5, Enum.EasingStyle.Linear), 
+								{Rate = 400}
+							)
+							tweenRate:Play()
+
+							local startSpeed = partitit.Speed
+							local targetMin = startSpeed.Min * 4
+							local targetMax = startSpeed.Max * 4
+
+							task.spawn(function()
+								local duration = 5
+								local elapsed = 0
+
+								while elapsed < duration do
+									local dt = task.wait()
+									elapsed = elapsed + dt
+									local alpha = math.clamp(elapsed / duration, 0, 1)
+
+									local currentMin = startSpeed.Min + (targetMin - startSpeed.Min) * alpha
+									local currentMax = startSpeed.Max + (targetMax - startSpeed.Max) * alpha
+
+									partitit.Speed = NumberRange.new(currentMin, currentMax)
+								end
+
+								partitit.Speed = NumberRange.new(targetMin, targetMax)
+							end)
+						end
+					end
+					for _, partititi in pairs(currentEntity:GetDescendants()) do
+						if partititi:IsA("ParticleEmitter") then
+							task.spawn(function()
+								local duration = 5
+								local elapsed = 0
+
+								local startSpeed = partititi.Speed
+								local startMin, startMax = startSpeed.Min, startSpeed.Max
+
+								local targetMin, targetMax = 100, 100
+
+								while elapsed < duration do
+									local dt = task.wait()
+									elapsed = elapsed + dt
+									local alpha = math.clamp(elapsed / duration, 0, 1)
+
+									local currentMin = startMin + (targetMin - startMin) * alpha
+									local currentMax = startMax + (targetMax - startMax) * alpha
+
+									partititi.Speed = NumberRange.new(currentMin, currentMax)
+								end
+
+								partititi.Speed = NumberRange.new(targetMin, targetMax)
+							end)
+						end
+					end
+
+					local snd1 = Instance.new("Sound")
+					snd1.SoundId = "rbxassetid://111715441853991"
+					snd1.Volume = 5
+					snd1.PlaybackSpeed = 0.1
+					snd1.Parent = workspace
+					snd1:Play()
+
+					local aaa = TweenService:Create(snd1, TweenInfo.new(14, Enum.EasingStyle.Linear), {PlaybackSpeed = 2})
+					aaa:Play()
+
+					local snd2 = Instance.new("Sound")
+					snd2.SoundId = "rbxassetid://137044859218769"
+					snd2.Volume = 5
+					snd2.PlaybackSpeed = 1
+					snd2.Parent = workspace
+					snd2:Play()
+
+					task.wait(5)
+					MAX_PARTICLES = 540
+					PARTICLES_PER_RATE = 70
+					TweenService:Create(container, TweenInfo.new(4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(1, -340, 1, -40)}):Play()
+					game.Lighting.FogEnd = 100
+					game.Lighting.FogStart = 0
+					game.Lighting.FogColor = Color3.fromRGB(139,155,248)
+					aaa:Destroy()
+					snd2.Volume = 10
+					snd2.PlaybackSpeed = 1
+					if frost and frost.Parent then frost.Enabled = true end
+					frost.TintColor = Color3.fromRGB(139,155,248)
+					gui.Enabled = true
+					vignetteGui.Enabled = true
+					if snd1 and snd1.Parent then snd1:Destroy() end
+
+					local flashGui = Instance.new("ScreenGui")
+					flashGui.IgnoreGuiInset = true
+					flashGui.Parent = player:WaitForChild("PlayerGui")
+					local flashFrame = Instance.new("Frame")
+					flashFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+					flashFrame.BackgroundTransparency = 0
+					flashFrame.Size = UDim2.new(1, 0, 1, 0)
+					flashFrame.Parent = flashGui
+					TweenService:Create(flashFrame, TweenInfo.new(1, Enum.EasingStyle.Linear), {BackgroundTransparency = 1}):Play()
+					game:GetService("Debris"):AddItem(flashGui, 1.1)
+
+					local snd3 = Instance.new("Sound")
+					snd3.SoundId = "rbxassetid://0"
+					snd3.Volume = 10
+					snd3.Parent = workspace
+					snd3:Play()
+					game:GetService("Debris"):AddItem(snd3, 5)
+
+					local oldCF = currentEntity and currentEntity:GetPivot() or CFrame.new(0, 5, 0)
+					if currentEntity then
+						currentEntity:Destroy()
+					end
+
+					local newEntityModel = modelTemplate2:Clone()
+					newEntityModel.Name = "Frostyma5n2"
+					newEntityModel.Parent = workspace
+					currentEntity = newEntityModel
+
+					newEntityModel:PivotTo(oldCF)
+
+					for _, p in ipairs(newEntityModel:GetDescendants()) do
+						if p:IsA("BasePart") then
+							p.CanCollide = false
+							p.Anchored = true
+						end
+						if p:IsA("PointLight") then
+							local sizeofcome = p.Range
+							p.Range = sizeofcome * 0.5
+							p.Brightness = p.Brightness * 0.5
+						end
+					end
+
+					if Phase1 then Phase1:Stop() end
+					if Phase2 then Phase2:Play() end
+					StartCustomShake()
+					phase2Started = true
+				end
+
+				if isDashing then
+				else
+					if phase2Started then
+						
+						if not isExecutingSnowStorm then
+							dashTimer = dashTimer + dt
+							local requiredWait = 2.5
+							if dashTimer >= requiredWait then
+								dashTimer = 0
+								isDashing = true
+								TriggerDashLightFixture()
+
+								local dashSound = Instance.new("Sound")
+								dashSound.SoundId = "rbxassetid://82851845869677"
+								dashSound.Volume = 4
+								dashSound.Parent = workspace
+								dashSound:Play()
+								game:GetService("Debris"):AddItem(dashSound, 3)
+
+								local dashSound2 = Instance.new("Sound")
+								dashSound2.SoundId = "rbxassetid://135640489101126"
+								dashSound2.Volume = 4
+								dashSound2.Parent = workspace
+								dashSound2:Play()
+								game:GetService("Debris"):AddItem(dashSound2, 4)
+
+								task.spawn(supershake)
+								FovKit2(120,70,1)
+
+								local screengui = Instance.new("ScreenGui")
+								screengui.IgnoreGuiInset = true
+								screengui.Parent = player:WaitForChild("PlayerGui")
+								local flash = Instance.new("Frame")
+								flash.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+								flash.Parent = screengui
+								flash.BackgroundTransparency = 0
+								flash.Size = UDim2.new(1, 0, 1, 0)
+								TweenService:Create(flash, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
+								game:GetService("Debris"):AddItem(flash, 0.35)
+
+								if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and currentEntity and currentEntity.Parent then
+									local hrp = player.Character.HumanoidRootPart
+									local randomX = math.random(-15, 15)
+									local randomZ = math.random(-15, 15)
+									local targetPos = hrp.Position + Vector3.new(randomX, 4, randomZ)
+									local targetCF = CFrame.new(targetPos, hrp.Position)
+
+									local tween = TweenModel(currentEntity, targetCF, 0.3)
+									if tween then
+										tween.Completed:Connect(function()
+											isDashing = false
+										end)
+									else
+										isDashing = false
+									end
+								else
+									isDashing = false
+								end
+
+								ShootSpike()
+							end
+						end
+					elseif not phase2Started then
+						dashTimer = dashTimer + dt
+						local requiredWait = 5
+						if dashTimer >= requiredWait then
+							dashTimer = 0
+							isDashing = true
+							TriggerDashLightFixture()
+
+							local dashSound = Instance.new("Sound")
+							dashSound.SoundId = "rbxassetid://82851845869677"
+							dashSound.Volume = 4
+							dashSound.Parent = workspace
+							dashSound:Play()
+							game:GetService("Debris"):AddItem(dashSound, 3)
+
+							local dashSound2 = Instance.new("Sound")
+							dashSound2.SoundId = "rbxassetid://135640489101126"
+							dashSound2.Volume = 4
+							dashSound2.Parent = workspace
+							dashSound2:Play()
+							game:GetService("Debris"):AddItem(dashSound2, 4)
+
+							task.spawn(supershake)
+							FovKit2(120,70,1)
+
+							local screengui = Instance.new("ScreenGui")
+							screengui.IgnoreGuiInset = true
+							screengui.Parent = player:WaitForChild("PlayerGui")
+							local flash = Instance.new("Frame")
+							flash.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+							flash.Parent = screengui
+							flash.BackgroundTransparency = 0
+							flash.Size = UDim2.new(1, 0, 1, 0)
+							TweenService:Create(flash, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
+							game:GetService("Debris"):AddItem(flash, 0.35)
+
+							if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and currentEntity and currentEntity.Parent then
+								local hrp = player.Character.HumanoidRootPart
+								local randomX = math.random(-15, 15)
+								local randomZ = math.random(-15, 15)
+								local targetPos = hrp.Position + Vector3.new(randomX, 4, randomZ)
+								local targetCF = CFrame.new(targetPos, hrp.Position)
+
+								local tween = TweenModel(currentEntity, targetCF, 0.3)
+								if tween then
+									tween.Completed:Connect(function()
+										isDashing = false
+									end)
+								else
+									isDashing = false
+								end
+							else
+								isDashing = false
+							end
+						end
+					end
+				end
+			end
+		end)
+
+		task.spawn(function()
+			while currentEntity and currentEntity.Parent do
+				if isTransitioning and not phase2Started then
+					task.wait(0.1)
+				elseif isExecutingSnowStorm then
+					task.wait(0.1)
+				elseif not phase2Started then
+					task.wait(0.002)
+					DrainCold(0.02 , 10)
+					if fillBar and fillBar.Parent then
+						local percent = math.clamp(currentCold / MAX_COLD, 0, 1)
+						fillBar.Size = UDim2.new(percent, 0, 1, 0)
+					end
+				else
+					task.wait(0.004)
+					DrainCold(0.01 , 5)
+					if fillBar and fillBar.Parent then
+						local percent = math.clamp(currentCold / MAX_COLD, 0, 1)
+						fillBar.Size = UDim2.new(percent, 0, 1, 0)
+					end
+				end
+			end
+		end)
+	end
+end
